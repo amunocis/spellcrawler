@@ -1,0 +1,22 @@
+# LÖVE / Lua
+*.love
+*.zip
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.log
+
+# Build artifacts
+dist/
+build/
