@@ -42,77 +42,617 @@
 
 ## 2. Arquitectura del Proyecto
 
-### 🏗️ Patrón Registry (Inyección de Dependencias)
+### 🏛️ Clean Architecture: Capas y Dependencias
 
-```lua
--- Único punto de acceso global
-_G.Registry = Registry:new()
-
--- Registrar sistemas
-_G.Registry:register('event_bus', EventBus:new())
-_G.Registry:register('input', InputManager:new())
-
--- Recuperar en cualquier parte
-local input = _G.Registry:get('input')
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    CAPA DE PRESENTACIÓN                      │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
+│  │ MenuState   │  │  HubState   │  │    DungeonState     │  │
+│  │   (UI)      │  │  (UI + NPC) │  │ (Gameplay + Render) │  │
+│  └──────┬──────┘  └──────┬──────┘  └──────────┬──────────┘  │
+└─────────┼────────────────┼────────────────────┼─────────────┘
+          │                │                    │
+          ▼                ▼                    ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    CAPA DE APLICACIÓN                        │
+│  ┌──────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
+│  │ StateManager │  │   Systems   │  │  Spell/Quest Logic  │  │
+│  │ (Orchestra)  │  │  (Process)  │  │    (Use Cases)      │  │
+│  └──────┬───────┘  └──────┬──────┘  └──────────┬──────────┘  │
+└─────────┼─────────────────┼────────────────────┼─────────────┘
+          │                 │                    │
+          ▼                 ▼                    ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    CAPA DE DOMINIO                           │
+│  ┌──────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
+│  │  Components  │  │  Entities   │  │   Events/Messages   │  │
+│  │   (Data)     │  │ (Aggregate) │  │    (Protocol)       │  │
+│  └──────────────┘  └─────────────┘  └─────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+          ▲
+          │
+┌─────────────────────────────────────────────────────────────┐
+│                    CAPA DE INFRAESTRUCTURA                   │
+│  ┌──────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
+│  │   Registry   │  │  EventBus   │  │   InputManager      │  │
+│  │   (DI)       │  │  (Message)  │  │   (Abstraction)     │  │
+│  └──────────────┘  └─────────────┘  └─────────────────────┘  │
+│  ┌──────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
+│  │  bump.lua    │  │  LÖVE API   │  │   File System       │  │
+│  │ (Collision)  │  │  (External) │  │   (External)        │  │
+│  └──────────────┘  └─────────────┘  └─────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-**¿Por qué?** Elimina dependencias globales directas. Todo pasa por el Registry.
+**Regla de Oro:** Las dependencias apuntan SIEMPRE hacia adentro (hacia el dominio). El dominio NO depende de LÖVE, UI, ni detalles técnicos.
 
-### 📡 Event Bus
+---
 
-**Actualmente:** Síncrono (procesa inmediatamente)
+### 🎯 Principios SOLID Aplicados
+
+#### S - Single Responsibility Principle
+
+Cada módulo tiene UNA razón para cambiar:
 
 ```lua
-local eventBus = _G.Registry:get('event_bus')
+-- ❌ MAL: Una clase hace todo
+local Player = {
+    update = function(self, dt) ... end,  -- lógica
+    draw = function(self) ... end,        -- render
+    save = function(self) ... end,        -- persistencia
+    handleInput = function(self) ... end  -- input
+}
 
--- Suscribirse
-local unsubscribe = eventBus:on('spell:cast', function(data) ... end)
-
--- Emitir
-eventBus:emit('spell:cast', {type = 'chispa', x = 100, y = 200})
+-- ✅ BIEN: Separado
+-- PlayerComponent: solo datos
+-- PlayerSystem: solo lógica de update
+-- RenderSystem: solo dibujo
+-- SaveManager: solo persistencia
+-- InputManager: abstrae input
 ```
 
-**Para cambiar a asíncrono:** Modificar solo `eventBus:emit()` para que use `queue()` en lugar de `_dispatch()` directo.
+**En nuestro código:**
+- `Registry` solo hace DI (no lógica de juego)
+- `EventBus` solo comunica (no procesa)
+- `InputManager` solo lee input (no actúa)
+- Cada `System` solo procesa un aspecto
 
-### 🎮 Input Manager
+#### O - Open/Closed Principle
 
-Abstrae completamente el dispositivo de entrada:
+Abierto para extensión, cerrado para modificación:
 
 ```lua
-local input = _G.Registry:get('input')
+-- ✅ Agregar un nuevo hechizo sin tocar código existente
+-- Solo crear archivo: data/spells/mi_hechizo.lua
 
--- Consultar acciones (no teclas)
-if input:pressed('cast_spell') then ... end
-if input:isDown('move_left') then ... end
+-- ✅ Agregar input sin tocar InputManager
+inputManager:map('mi_accion', {'key:f', 'button:y'})
 
--- Obtener vectores
-local moveX, moveY = input:getMovementVector()  -- Normalizado
-local aimX, aimY = input:getAimDirection(x, y)  -- Hacia mouse o right stick
+-- ✅ Agregar sistema sin tocar core
+local MiSistema = require('src.ecs.systems.mi_sistema')
+table.insert(systems, MiSistema)
 ```
 
-**Mapeo actual (ver `setupDefaultMappings()`):**
-- Movimiento: WASD / Flechas / Left Stick
-- Disparar: ESPACIO / Click Izquierdo / Botón A
-- Dash: LShift / Botón B
-- Interactuar: E / Botón X
-- Pausa: ESC / Start
+**Ejemplo práctico:** Para agregar un nuevo tipo de efecto de hechizo:
+1. Crear `src/spells/effects/mi_efecto.lua`
+2. Registrar en `EffectRegistry`
+3. Los hechizos existentes no se ven afectados
 
-### 🔄 Game State Machine
+#### L - Liskov Substitution Principle
+
+Los componentes deben ser intercambiables:
 
 ```lua
-local stateManager = _G.Registry:get('state_manager')
+-- ✅ Todos los sistemas tienen la misma interfaz
+local systems = {
+    movementSystem,  -- :update(entities, dt)
+    combatSystem,    -- :update(entities, dt)
+    spellSystem,     -- :update(entities, dt)
+}
 
--- Registrar estados disponibles
-stateManager:register('menu', MenuState)
-stateManager:register('dungeon', DungeonState)
+for _, system in ipairs(systems) do
+    system:update(entities, dt)  -- Mismo contrato
+end
+```
 
--- Cambiar estado (llama exit() del actual, enter() del nuevo)
-stateManager:switch('dungeon')
+#### I - Interface Segregation Principle
+
+Mejor muchas interfaces pequeñas que una grande:
+
+```lua
+-- ❌ MAL: Una interfaz gigante
+local ComponentGigante = {
+    x, y, rotation,     -- Transform
+    hp, maxHp,          -- Health
+    vx, vy,             -- Velocity
+    mana, spells,       -- SpellCaster
+    sprite, animation   -- Render
+}
+
+-- ✅ BIEN: Componentes separados
+local Transform = {x, y, rotation}
+local Health = {current, max}
+local Velocity = {x, y, maxSpeed}
+local SpellCaster = {mana, spells}
+```
+
+**En nuestro código:** Cada componente es opcional. Una entidad puede tener solo `Transform`, o `Transform + Health + Velocity`.
+
+#### D - Dependency Inversion Principle
+
+Depender de abstracciones, no de concreciones:
+
+```lua
+-- ❌ MAL: Depende de implementación específica
+function Player:update(dt)
+    if love.keyboard.isDown('space') then  -- Hard-coded LÖVE
+        -- ...
+    end
+end
+
+-- ✅ BIEN: Depende de abstracción
+function Player:update(dt, inputManager)  -- Inyectado
+    if inputManager:pressed('cast_spell') then  -- Acción abstracta
+        -- ...
+    end
+end
+```
+
+**En nuestro código:** Todos los sistemas reciben dependencias vía Registry (constructor injection) o parámetros (method injection).
+
+---
+
+### 📋 MVI: Model-View-Intent en Gameplay
+
+Implementación específica para el gameplay (DungeonState):
+
+```
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│    INPUT     │────▶│    INTENT    │────▶│    MODEL     │
+│              │     │   (Systems)  │     │   (State)    │
+│  - Keyboard  │     │              │     │              │
+│  - Mouse     │     │  - Movement  │     │  - Entities  │
+│  - Gamepad   │     │  - Combat    │     │  - World     │
+└──────────────┘     │  - Spells    │     │  - Inventory │
+                     └──────────────┘     └──────┬───────┘
+                                                  │
+                       ┌──────────────────────────┘
+                       │ Solo lectura
+                       ▼
+              ┌─────────────────┐
+              │      VIEW       │
+              │    (Render)     │
+              │                 │
+              │  - Sprites      │
+              │  - UI           │
+              │  - Camera       │
+              └─────────────────┘
+```
+
+**Flujo de datos unidireccional:**
+1. Input → Sistema captura intención
+2. Intent → Sistema modifica Model
+3. Model → View renderiza estado actual
+4. NUNCA: View → Model directamente
+
+```lua
+-- DungeonState:update() - INTENT
+function DungeonState:update(dt)
+    -- Input → Intent
+    local moveX, moveY = input:getMovementVector()
+
+    -- Intent → Model (sistema modifica estado)
+    self:updatePlayerMovement(dt, moveX, moveY)
+    self:updateProjectiles(dt)
+
+    -- (View renderiza en :draw())
+end
+
+-- DungeonState:draw() - VIEW
+function DungeonState:draw()
+    -- SOLO LECTURA del model
+    for _, entity in ipairs(self.entities) do
+        drawEntity(entity)  -- Nunca modifica
+    end
+end
 ```
 
 ---
 
-## 3. Estructura de Directorios
+### 🧩 Patrones Específicos Usados
+
+#### 1. Component Pattern (ECS Lite)
+
+```lua
+-- Composición sobre herencia
+local entity = {}
+
+-- Agregar comportamiento por composición
+if needsMovement then
+    entity.transform = Transform:new(x, y)
+    entity.velocity = Velocity:new(0, 0, speed)
+end
+
+if canTakeDamage then
+    entity.health = Health:new(maxHp)
+end
+
+if canCastSpells then
+    entity.spellCaster = SpellCaster:new(mana, spells)
+end
+```
+
+#### 2. Observer Pattern (Event Bus)
+
+```lua
+-- Desacopla emisor de receptores
+-- Sistema A no sabe que existe Sistema B
+
+-- En SpellSystem:
+eventBus:emit('entity:died', {entity = enemy, killer = player})
+
+-- En QuestSystem (en cualquier lugar):
+eventBus:on('entity:died', function(data)
+    questManager:checkKillObjective(data.entity.type)
+end)
+
+-- En AchievementSystem:
+eventBus:on('entity:died', function(data)
+    achievementManager:trackKill(data.entity.type)
+end)
+```
+
+#### 3. State Pattern (Game States)
+
+```lua
+-- Cada estado es una clase completa
+-- Cambio de estado = cambio de comportamiento global
+
+local states = {
+    menu = MenuState:new(),      -- Input: navegación UI
+    hub = HubState:new(),        -- Input: movimiento + dialogo
+    dungeon = DungeonState:new(), -- Input: combate
+}
+
+stateManager:switch('dungeon')  -- Comportamiento cambia completamente
+```
+
+#### 4. Strategy Pattern (Input Mappings)
+
+```lua
+-- Mismo input, diferentes dispositivos
+inputManager:map('cast_spell', {
+    'key:space',
+    'mouse:1',
+    'button:a'
+})
+
+-- El código del juego no sabe/care de qué dispositivo
+if input:pressed('cast_spell') then ... end
+```
+
+#### 5. Factory Pattern (Entity Creation)
+
+```lua
+-- Entities no se crean directamente, pasan por factories
+
+-- ❌ MAL:
+local enemy = {x = 100, y = 200, hp = 50}  -- ¿Qué tipo? ¿Qué componentes?
+
+-- ✅ BIEN:
+local enemy = EnemyFactory:create('murcielago', {x = 100, y = 200})
+-- Garantiza componentes correctos, inicialización apropiada
+```
+
+#### 6. Command Pattern (Para input y spells)
+
+```lua
+-- Encapsula acciones como objetos
+local MoveCommand = {dx = 0, dy = 0, entity = nil}
+function MoveCommand:execute()
+    self.entity.transform:translate(self.dx, self.dy)
+end
+
+-- Permite: undo, replay, queue, macro
+```
+
+---
+
+## 3. Anti-Patrones a EVITAR
+
+### ❌ God Object / God Class
+
+```lua
+-- NUNCA hacer esto:
+local Game = {
+    player = {}, enemies = {}, world = {},
+    camera = {}, ui = {}, audio = {},
+    update = function() -- 500 líneas
+    draw = function()   -- 500 líneas
+    save = function()   -- 200 líneas
+end
+}
+```
+
+**Solución:** Separar en sistemas especializados.
+
+### ❌ Global State Directo
+
+```lua
+-- NUNCA:
+_G.player = {x = 100, y = 100}  -- Cualquiera puede modificar
+
+-- NUNCA:
+function update(dt)
+    if _G.gameState == 'playing' then  -- Acoplamiento global
+```
+
+**Solución:** Usar Registry para acceso controlado.
+
+### ❌ Singleton Abuse
+
+```lua
+-- NUNCA:
+local AudioManager = require('src.core.audio_manager')
+-- AudioManager es global singleton
+
+-- ✅ BIEN:
+local audio = Registry:get('audio')  -- Inyectado, testeable
+```
+
+### ❌ Feature Envy
+
+```lua
+-- NUNCA: Sistema A accediendo a datos internos de B
+function RenderSystem:draw(entity)
+    if entity.health.current < 20 then  -- Sabe demasiado de Health
+        drawLowHealthEffect()
+    end
+end
+
+-- ✅ BIEN:
+function RenderSystem:draw(entity)
+    if entity.health:isLow() then  -- Health encapsula su lógica
+        drawLowHealthEffect()
+    end
+end
+```
+
+### ❌ Premature Abstraction
+
+```lua
+-- NUNCA: Crear sistema complejo para algo simple
+local ProyectilFactory = require('...')
+local ProyectilPool = require('...')
+local ProyectilBehavior = require('...')
+
+-- ✅ BIEN: Empezar simple, refactorizar cuando necesario
+local proyectiles = {}
+function spawnProyectil(x, y, vx, vy)
+    table.insert(proyectiles, {x = x, y = y, vx = vx, vy = vy})
+end
+```
+
+### ❌ Circular Dependencies
+
+```lua
+-- NUNCA:
+-- player.lua require('enemy')
+-- enemy.lua require('player')
+
+-- ✅ BIEN: Dependencia común o eventos
+-- player.lua y enemy.lua requieren 'damage_system'
+-- O usan EventBus para comunicarse
+```
+
+---
+
+## 4. Testing con Esta Arquitectura
+
+### Unit Testing
+
+```lua
+-- Testear sistema aislado (sin LÖVE, sin Registry real)
+local EventBus = require('src.core.event_bus')
+
+describe('EventBus', function()
+    it('should dispatch events to listeners', function()
+        local bus = EventBus:new()
+        local called = false
+
+        bus:on('test', function() called = true end)
+        bus:emit('test')
+
+        assert.is_true(called)
+    end)
+end)
+```
+
+### Integration Testing
+
+```lua
+-- Testear interacción entre sistemas
+local SpellSystem = require('src.ecs.systems.spell_system')
+local HealthSystem = require('src.ecs.systems.health_system')
+
+describe('SpellDamage', function()
+    it('should reduce health on damage spell', function()
+        local entity = {
+            health = {current = 100, max = 100}
+        }
+
+        SpellSystem:cast(entity, {type = 'damage', amount = 20})
+        HealthSystem:update({entity}, 0)
+
+        assert.equal(80, entity.health.current)
+    end)
+end)
+```
+
+### Mocking Registry
+
+```lua
+-- Para testear código que usa Registry
+local function mockRegistry(services)
+    _G.Registry = {
+        _services = services or {},
+        get = function(self, name) return self._services[name] end,
+        register = function(self, name, service) self._services[name] = service end
+    }
+end
+
+-- Uso:
+before_each(function()
+    mockRegistry({
+        event_bus = EventBus:new(),
+        input = MockInput:new()
+    })
+end)
+```
+
+---
+
+## 5. Convenciones de Código
+
+### 1. Módulos
+
+```lua
+-- Siempre retornar tabla con métodos
+local MiModulo = {}
+MiModulo.__index = MiModulo
+
+function MiModulo:new(params)
+    local instance = {}
+    setmetatable(instance, self)
+    -- inicialización
+    return instance
+end
+
+function MiModulo:metodoPublico()
+    -- ...
+end
+
+local function funcionPrivada()  -- local = privado
+    -- ...
+end
+
+return MiModulo
+```
+
+### 2. Clases/OOP
+
+```lua
+-- Usar __index pattern de Lua
+MiClase.__index = MiClase
+
+-- Herencia
+MiSubclase = setmetatable({}, {__index = MiClase})
+MiSubclase.__index = MiSubclase
+```
+
+### 3. Registry
+
+```lua
+-- Prefijo _G. solo en main.lua
+_G.Registry = Registry:new()
+
+-- Después, siempre usar variable local
+local registry = _G.Registry  -- o pasar como parámetro
+local input = registry:get('input')
+```
+
+### 4. Eventos
+
+- Formato: `'sistema:acción'` (ej: `'spell:cast'`, `'entity:died'`)
+- Datos: Tabla con contexto relevante, no objetos completos
+
+```lua
+-- ✅ BIEN:
+eventBus:emit('entity:died', {
+    entity = entity,
+    killer = killer,
+    damageType = 'fire'
+})
+
+-- ❌ MAL:
+eventBus:emit('entity died', entity)  -- Mensaje poco estructurado
+```
+
+---
+
+## 6. Cómo Extender el Sistema
+
+### Agregar un Nuevo Componente
+
+```lua
+-- 1. Crear archivo: src/ecs/components/mi_componente.lua
+local MiComponente = {}
+MiComponente.__index = MiComponente
+
+function MiComponente:new(params)
+    local instance = {
+        -- datos del componente
+    }
+    setmetatable(instance, self)
+    return instance
+end
+
+return MiComponente
+
+-- 2. Agregar a entidades que lo necesiten
+entity.miComponente = MiComponente:new(params)
+
+-- 3. (Opcional) Crear sistema que lo procese
+local MiSistema = require('src.ecs.systems.mi_sistema')
+table.insert(systems, MiSistema)
+```
+
+### Agregar un Nuevo Hechizo
+
+```lua
+-- 1. Crear definición: data/spells/mi_hechizo.lua
+return {
+    id = 'mi_hechizo',
+    name = 'Mi Hechizo',
+    mana_cost = 10,
+    effects = {
+        {type = 'mi_efecto', params = {...}}
+    }
+}
+
+-- 2. Registrar efecto si es nuevo (src/spells/effects/mi_efecto.lua)
+-- 3. Listo - SpellSystem lo cargará automáticamente
+```
+
+### Agregar un Nuevo Estado
+
+```lua
+-- 1. Crear archivo: src/states/mi_estado.lua
+local MiEstado = {}
+MiEstado.__index = MiEstado
+
+function MiEstado:new()
+    return setmetatable({}, self)
+end
+
+function MiEstado:enter() end
+function MiEstado:exit() end
+function MiEstado:update(dt) end
+function MiEstado:draw() end
+
+return MiEstado
+
+-- 2. Registrar en main.lua:
+stateManager:register('mi_estado', MiEstado)
+
+-- 3. Cambiar a él:
+stateManager:switch('mi_estado')
+```
+
+---
+
+## 7. Estructura de Directorios
 
 ```
 spellcrawler/
@@ -152,7 +692,7 @@ spellcrawler/
 
 ---
 
-## 4. Decisiones Arquitectónicas Clave
+## 8. Decisiones Arquitectónicas Clave
 
 ### ECS: ¿Cómo implementarlo?
 
@@ -202,7 +742,7 @@ Los estados de UI (Menu) no necesitan MVI completo.
 
 ---
 
-## 5. Sistemas Pendientes (Por Prioridad)
+## 9. Sistemas Pendientes (Por Prioridad)
 
 ### 🔥 ALTA PRIORIDAD - Core Loop
 
@@ -301,19 +841,12 @@ Reemplazar el cuarto simple de DungeonState con:
 
 ---
 
-## 7. Notas Técnicas
+## 10. Notas Técnicas
 
 ### LÖVE Versión
 - Target: **11.4**
 - Módulos desactivados: `physics` (usamos bump.lua)
 - Módulos activados: `joystick`
-
-### Convenciones de Código
-
-1. **Módulos:** Siempre retornar tabla con métodos
-2. **Clases/OOP:** Usar `__index` pattern de Lua
-3. **Registry:** Prefijo `_G.` solo en main.lua, después usar variable local
-4. **Eventos:** Usar formato `'sistema:acción'` (ej: `'spell:cast'`, `'entity:died'`)
 
 ### Debugging
 
@@ -333,7 +866,7 @@ end)
 
 ---
 
-## 8. Ideas de Diseño Pendientes
+## 11. Ideas de Diseño Pendientes
 
 ### Sistema de Magia Emergente
 
@@ -359,7 +892,7 @@ Implementación: shader simple o multiplicación de color en sprites de hechizos
 
 ---
 
-## 9. Recursos Útiles
+## 12. Recursos Útiles
 
 ### Librerías Incluidas (hump)
 - `gamestate.lua` - Máquina de estados (alternativa a nuestro StateManager)
@@ -375,7 +908,7 @@ Implementación: shader simple o multiplicación de color en sprites de hechizos
 
 ---
 
-## 10. Comandos Útiles
+## 13. Comandos Útiles
 
 ```bash
 # Ejecutar juego
