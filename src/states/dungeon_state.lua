@@ -1,5 +1,5 @@
 -- src/states/dungeon_state.lua
--- Estado de gameplay en la mazmorra
+-- Estado de gameplay en la mazmorra (con generación procedural)
 
 local bump = require('lib.bump')
 local SpellRegistry = require('src.spells.spell_registry')
@@ -7,6 +7,8 @@ local SpellCaster = require('src.spells.spell_caster')
 local SpellDataLoader = require('src.spells.spell_data_loader')
 local EnemyFactory = require('src.enemies.enemy_factory')
 local CombatSystem = require('src.combat.combat_system')
+local FloorGenerator = require('src.dungeon.floor_generator')
+local RoomRenderer = require('src.dungeon.room_renderer')
 
 local DungeonState = {}
 DungeonState.__index = DungeonState
@@ -17,24 +19,41 @@ function DungeonState:new()
     return instance
 end
 
-function DungeonState:enter()
+function DungeonState:enter(seed)
     print("DungeonState: enter")
 
-    -- Límites del mundo
-    self.worldBounds = {
-        x = 40,      -- Después de la pared izquierda
-        y = 40,      -- Después de la pared superior
-        w = 720,     -- 800 - 40 - 40 (ancho menos paredes)
-        h = 520      -- 600 - 40 - 40 (alto menos paredes)
-    }
+    -- Generar dungeon procedural
+    local generator = FloorGenerator:new(seed)
+    self.floor = generator:generate(8)  -- 8 habitaciones
+    self.roomRenderer = RoomRenderer:new()
+    
+    -- Renderizar cada habitación a tiles
+    self.roomTiles = {}
+    self.walls = {}
+    
+    for _, room in ipairs(self.floor.rooms) do
+      self.roomTiles[room] = self.roomRenderer:generateTiles(room, 'cavern')
+      local collisionObjects = self.roomRenderer:createCollisionObjects(room, self.roomTiles[room])
+      
+      for _, obj in ipairs(collisionObjects) do
+        table.insert(self.walls, obj)
+      end
+    end
 
     -- Mundo de colisiones
     self.world = bump.newWorld(64)
 
+    -- Cargar hechizos
+    SpellDataLoader:loadAllSpells()
+
+    -- Encontrar habitación de entrada y posicionar jugador
+    local entranceRoom = self.floor:getEntrance()
+    local spawnPos = self.roomRenderer:getPlayerSpawn(entranceRoom)
+    
     -- Jugador con SpellCaster
     self.player = {
-        x = 400,
-        y = 300,
+        x = spawnPos.x,
+        y = spawnPos.y,
         w = 20,
         h = 20,
         speed = 250,
@@ -46,10 +65,7 @@ function DungeonState:enter()
     }
     self.world:add(self.player, self.player.x, self.player.y, self.player.w, self.player.h)
 
-    -- Cargar hechizos desde archivos de datos
-    SpellDataLoader:loadAllSpells()
-
-    -- Equipar hechizos al jugador
+    -- Equipar hechizos
     self.player.spellCaster:equipSpell(1, 'chispa')
     self.player.spellCaster:equipSpell(2, 'dardo_magico')
     self.player.spellCaster:equipSpell(3, 'rafaga_viento')
@@ -65,21 +81,23 @@ function DungeonState:enter()
     self.damageFlash = 0
     self.particles = {}
 
-    -- Paredes de prueba
-    self.walls = {}
-    self:createWalls()
+    -- Registrar paredes en bump
+    for _, wall in ipairs(self.walls) do
+      self.world:add(wall, wall.x, wall.y, wall.w, wall.h)
+    end
 
     -- Sistema de combate
     self.combatSystem = CombatSystem:new()
 
-    -- Enemigos
-    self:spawnEnemies()
-
-    -- Proyectiles (gestionados por CombatSystem)
+    -- Spawnear enemigos en cada habitación de combate
+    self:spawnEnemiesInRooms()
 
     -- Cámara
     self.cameraX = 0
     self.cameraY = 0
+    
+    -- Habitación actual del jugador
+    self.currentRoom = entranceRoom
 end
 
 function DungeonState:createWalls()
@@ -121,12 +139,13 @@ function DungeonState:isPositionSafeFromPlayer(x, y, minDistance)
 end
 
 function DungeonState:isInsideWorldBounds(x, y, w, h)
+    local bounds = self:calculateWorldBounds()
     local offsetX = (w or 16) / 2
     local offsetY = (h or 16) / 2
-    return x >= self.worldBounds.x + offsetX and
-           x <= self.worldBounds.x + self.worldBounds.w - offsetX and
-           y >= self.worldBounds.y + offsetY and
-           y <= self.worldBounds.y + self.worldBounds.h - offsetY
+    return x >= bounds.x + offsetX and
+           x <= bounds.x + bounds.w - offsetX and
+           y >= bounds.y + offsetY and
+           y <= bounds.y + bounds.h - offsetY
 end
 
 function DungeonState:spawnEnemySafe(createFn, x, y)
@@ -142,11 +161,14 @@ function DungeonState:spawnEnemySafe(createFn, x, y)
             break
         end
         
-        -- Elegir posición aleatoria dentro del mundo jugable
-        -- Margen de seguridad para que no queden pegados a las paredes
-        local margin = 60
-        spawnX = self.worldBounds.x + margin + math.random(0, self.worldBounds.w - margin * 2)
-        spawnY = self.worldBounds.y + margin + math.random(0, self.worldBounds.h - margin * 2)
+        -- Elegir posición aleatoria dentro de una habitación
+        -- Por ahora, usar posición de habitación de entrada
+        local entrance = self.floor:getEntrance()
+        if entrance then
+            local center = entrance:getCenter()
+            spawnX = center.x * 40 + math.random(-50, 50)
+            spawnY = center.y * 40 + math.random(-50, 50)
+        end
         attempts = attempts + 1
     end
 
@@ -156,14 +178,56 @@ function DungeonState:spawnEnemySafe(createFn, x, y)
     return enemy
 end
 
-function DungeonState:spawnEnemies()
-    -- Spawnear murciélagos en posiciones seguras
-    self:spawnEnemySafe(function(x, y) return EnemyFactory:createBat(x, y) end, 200, 150)
-    self:spawnEnemySafe(function(x, y) return EnemyFactory:createBat(x, y) end, 600, 200)
-    self:spawnEnemySafe(function(x, y) return EnemyFactory:createBat(x, y) end, 500, 500)
+function DungeonState:spawnEnemiesInRooms()
+    -- Spawnear enemigos en habitaciones de combate
+    for _, room in ipairs(self.floor.rooms) do
+      -- Determinar tipo de contenido si no está asignado
+      if not room.contentType or room.contentType == 'empty' then
+        if room.isEntrance or room.isExit then
+          room:setContentType('empty')
+        elseif math.random() < 0.2 then
+          room:setContentType('treasure')
+        elseif math.random() < 0.15 then
+          room:setContentType('boss')
+        else
+          room:setContentType('combat')
+        end
+      end
+      
+      -- Spawnear enemigos según tipo
+      if room.contentType == 'combat' then
+        self:spawnEnemiesInRoom(room, math.random(2, 4))
+      elseif room.contentType == 'boss' then
+        self:spawnEnemiesInRoom(room, 1, true)  -- 1 enemigo fuerte
+      elseif room.contentType == 'treasure' then
+        -- No enemigos, solo loot
+      end
+    end
+end
 
-    -- Spawnear golem en posición segura
-    self:spawnEnemySafe(function(x, y) return EnemyFactory:createGolem(x, y) end, 150, 450)
+function DungeonState:spawnEnemiesInRoom(room, count, isBoss)
+    local spawnPoints = self.roomRenderer:getEnemySpawnPoints(room, self.roomTiles[room])
+    
+    -- Mezclar spawn points
+    for i = #spawnPoints, 2, -1 do
+        local j = math.random(i)
+        spawnPoints[i], spawnPoints[j] = spawnPoints[j], spawnPoints[i]
+    end
+    
+    -- Spawnear enemigos
+    for i = 1, math.min(count, #spawnPoints) do
+        local point = spawnPoints[i]
+        local enemy
+        
+        if isBoss then
+            enemy = EnemyFactory:createGolem(point.x, point.y)
+        else
+            enemy = EnemyFactory:createBat(point.x, point.y)
+        end
+        
+        self.combatSystem:addEnemy(enemy)
+        self.world:add(enemy, enemy.transform.x, enemy.transform.y, enemy.collider.w, enemy.collider.h)
+    end
 end
 
 function DungeonState:updateEnemies(dt)
@@ -357,9 +421,33 @@ function DungeonState:update(dt)
     self.cameraY = self.player.y - love.graphics.getHeight() / 2
 end
 
+function DungeonState:calculateWorldBounds()
+    -- Calcular bounds basado en las habitaciones generadas
+    local minX, minY = math.huge, math.huge
+    local maxX, maxY = -math.huge, -math.huge
+    local tileSize = 40
+    
+    for _, room in ipairs(self.floor.rooms) do
+        minX = math.min(minX, room.x * tileSize)
+        minY = math.min(minY, room.y * tileSize)
+        maxX = math.max(maxX, (room.x + room.width) * tileSize)
+        maxY = math.max(maxY, (room.y + room.height) * tileSize)
+    end
+    
+    -- Agregar margen
+    local margin = 100
+    return {
+        x = minX - margin,
+        y = minY - margin,
+        w = (maxX - minX) + margin * 2,
+        h = (maxY - minY) + margin * 2
+    }
+end
+
 function DungeonState:clampToWorldBounds(x, y, w, h)
-    local clampedX = math.max(self.worldBounds.x, math.min(x, self.worldBounds.x + self.worldBounds.w - w))
-    local clampedY = math.max(self.worldBounds.y, math.min(y, self.worldBounds.y + self.worldBounds.h - h))
+    local bounds = self:calculateWorldBounds()
+    local clampedX = math.max(bounds.x, math.min(x, bounds.x + bounds.w - w))
+    local clampedY = math.max(bounds.y, math.min(y, bounds.y + bounds.h - h))
     return clampedX, clampedY
 end
 
@@ -502,11 +590,12 @@ function DungeonState:updateProjectiles(dt)
             end
         end
         
-        -- También verificar límites del mundo
-        if newX < self.worldBounds.x or 
-           newX + p.w > self.worldBounds.x + self.worldBounds.w or
-           newY < self.worldBounds.y or 
-           newY + p.h > self.worldBounds.y + self.worldBounds.h then
+        -- También verificar límites del mundo (basado en habitaciones)
+        local bounds = self:calculateWorldBounds()
+        if newX < bounds.x or 
+           newX + p.w > bounds.x + bounds.w or
+           newY < bounds.y or 
+           newY + p.h > bounds.y + bounds.h then
             hitWall = true
         end
 
@@ -557,23 +646,20 @@ function DungeonState:draw()
         return
     end
 
-    love.graphics.setBackgroundColor(0.08, 0.08, 0.12)
+    love.graphics.setBackgroundColor(0.05, 0.05, 0.08)
 
     -- Aplicar cámara
     love.graphics.push()
     love.graphics.translate(-self.cameraX, -self.cameraY)
 
-    -- Dibujar suelo
-    love.graphics.setColor(0.12, 0.12, 0.18)
-    love.graphics.rectangle('fill', 0, 0, 800, 600)
-
-    -- Dibujar paredes
-    love.graphics.setColor(0.3, 0.3, 0.4)
-    for _, wall in ipairs(self.walls) do
-        love.graphics.rectangle('fill', wall.x, wall.y, wall.w, wall.h)
-        love.graphics.setColor(0.4, 0.4, 0.5)
-        love.graphics.rectangle('line', wall.x, wall.y, wall.w, wall.h)
-        love.graphics.setColor(0.3, 0.3, 0.4)
+    -- Dibujar habitaciones generadas proceduralmente
+    -- Nota: la cámara ya se aplicó con translate, pasamos 0,0
+    if self.floor and self.roomRenderer then
+        for _, room in ipairs(self.floor.rooms) do
+            if self.roomTiles[room] then
+                self.roomRenderer:draw(room, self.roomTiles[room], 0, 0)
+            end
+        end
     end
 
     -- Dibujar proyectiles

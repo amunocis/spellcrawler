@@ -339,6 +339,17 @@ Después de cambios, verificar:
 
 ---
 
+## 📝 Planes de Implementación
+
+**Los planes se muestran DIRECTAMENTE en el chat.**
+
+- NO se crean archivos de plan (.md en .kimi/plans/)
+- El plan se escribe en la conversación para que el usuario lo vea inmediatamente
+- Se confirma con el usuario antes de proceder
+- Luego se ejecuta directamente
+
+---
+
 **Archivos de referencia obligatorios:**
 - `docs/HANDOVER.md` - Estado actual del proyecto
 - `docs/spellcrawler-gdd.md` - Game Design Document
