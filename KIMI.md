@@ -308,6 +308,22 @@ Después de cambios, verificar:
 
 ---
 
+## 📋 Checklist de Cierre de Feature
+
+Cuando un desarrollo/feature esté completo y cerrado:
+
+```
+□ 1. Tests pasando (busted)
+□ 2. Probar manualmente que funciona (love .)
+□ 3. Actualizar documentación (docs/HANDOVER.md)
+□ 4. Commit por separado (un commit por feature/fix)
+□ 5. Confirmar con el usuario antes de push
+```
+
+**REGLA DE ORO:** Un feature = Un commit. Nunca mezclar múltiples features en un solo commit.
+
+---
+
 **Archivos de referencia obligatorios:**
 - `docs/HANDOVER.md` - Estado actual del proyecto
 - `docs/spellcrawler-gdd.md` - Game Design Document
