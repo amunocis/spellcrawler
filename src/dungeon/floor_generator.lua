@@ -257,35 +257,32 @@ end
 -- dir: dirección desde la habitación padre hacia la nueva
 -- parentConnX, parentConnY: coordenadas del punto de conexión en la padre
 function FloorGenerator:calculateConnectionPoint(newRoom, dir, parentConnX, parentConnY)
-  local passage = 2
-  
   if dir == 'north' then
     -- Nueva habitación está ARRIBA de la padre
-    -- El punto de conexión está en el borde SUR de la nueva habitación
-    -- Alineado horizontalmente con el punto de la padre
+    -- El punto de conexión está en el borde SUR de la nueva habitación (dentro de la habitación)
     return {
       x = parentConnX,
-      y = newRoom.y + newRoom.height + passage - 1  -- Borde sur + pasillo
+      y = newRoom.y + newRoom.height - 1  -- Borde sur (última fila de tiles)
     }
   elseif dir == 'south' then
     -- Nueva habitación está ABAJO de la padre
-    -- El punto de conexión está en el borde NORTE de la nueva habitación
+    -- El punto de conexión está en el borde NORTE de la nueva habitación (dentro de la habitación)
     return {
       x = parentConnX,
-      y = newRoom.y - passage  -- Borde norte - pasillo
+      y = newRoom.y  -- Borde norte (primera fila de tiles)
     }
   elseif dir == 'east' then
     -- Nueva habitación está a la DERECHA de la padre
-    -- El punto de conexión está en el borde OESTE de la nueva habitación
+    -- El punto de conexión está en el borde OESTE de la nueva habitación (dentro de la habitación)
     return {
-      x = newRoom.x - passage,  -- Borde oeste - pasillo
+      x = newRoom.x,  -- Borde oeste (primera columna de tiles)
       y = parentConnY
     }
   elseif dir == 'west' then
     -- Nueva habitación está a la IZQUIERDA de la padre
-    -- El punto de conexión está en el borde ESTE de la nueva habitación
+    -- El punto de conexión está en el borde ESTE de la nueva habitación (dentro de la habitación)
     return {
-      x = newRoom.x + newRoom.width + passage - 1,  -- Borde este + pasillo
+      x = newRoom.x + newRoom.width - 1,  -- Borde este (última columna de tiles)
       y = parentConnY
     }
   end

@@ -151,5 +151,29 @@ describe('FloorGenerator', function()
           "Room at (" .. room.x .. "," .. room.y .. ") should have at least one connection")
       end
     end)
+    
+    it('every room must have at least 1 connection - no isolated rooms', function()
+      -- Test exhaustivo: verificar 100 generaciones con diferentes tamaños
+      for seed = 1, 100 do
+        for roomCount = 5, 12 do
+          local generator = FloorGenerator:new(seed * 997 + roomCount)
+          local floor = generator:generate(roomCount)
+          
+          -- Verificar que se generaron todas las habitaciones
+          assert.are.equal(roomCount, #floor.rooms, 
+            string.format("Expected %d rooms but got %d (seed=%d)", roomCount, #floor.rooms, seed))
+          
+          -- Verificar que cada habitación tiene al menos 1 conexión
+          for _, room in ipairs(floor.rooms) do
+            if #room.connections == 0 then
+              error(string.format(
+                "Room without doors! Type: %s, Pos: (%d, %d), Rooms: %d, Seed: %d",
+                room.type, room.x, room.y, roomCount, seed * 997 + roomCount
+              ))
+            end
+          end
+        end
+      end
+    end)
   end)
 end)
