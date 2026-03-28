@@ -653,10 +653,11 @@ function DungeonState:draw()
     love.graphics.translate(-self.cameraX, -self.cameraY)
 
     -- Dibujar habitaciones generadas proceduralmente
+    -- Nota: la cámara ya se aplicó con translate, pasamos 0,0
     if self.floor and self.roomRenderer then
         for _, room in ipairs(self.floor.rooms) do
             if self.roomTiles[room] then
-                self.roomRenderer:draw(room, self.roomTiles[room], self.cameraX, self.cameraY)
+                self.roomRenderer:draw(room, self.roomTiles[room], 0, 0)
             end
         end
     end

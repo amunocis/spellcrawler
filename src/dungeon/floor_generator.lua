@@ -171,12 +171,20 @@ function FloorGenerator:placeConnectedRoom(roomType)
     end
   end
   
+  -- Calcular el punto de conexión específico en la nueva habitación
+  -- (el punto en el borde de la nueva habitación que conecta con la padre)
+  local newConnectionPoint = self:calculateConnectionPoint(
+    newRoom, parentPoint.dir, parentPoint.x, parentPoint.y
+  )
+  
   -- Colocar habitación
   self:addRoom(newRoom)
   
   -- Conectar las habitaciones (bidireccional)
-  parentRoom:connectTo(newRoom, parentPoint, {x = newX, y = newY})
-  newRoom:connectTo(parentRoom, {x = newX, y = newY}, parentPoint)
+  -- parentPoint: punto en la habitación padre
+  -- newConnectionPoint: punto correspondiente en la nueva habitación
+  parentRoom:connectTo(newRoom, parentPoint, newConnectionPoint)
+  newRoom:connectTo(parentRoom, newConnectionPoint, parentPoint)
   
   -- Marcar conexión como usada
   connection.used = true
@@ -218,6 +226,46 @@ function FloorGenerator:calculateOffset(direction, roomType, parentRoom)
   end
   
   return {x = 0, y = 0}
+end
+
+-- Calcular el punto de conexión en la nueva habitación
+-- dir: dirección desde la habitación padre hacia la nueva
+-- parentConnX, parentConnY: coordenadas del punto de conexión en la padre
+function FloorGenerator:calculateConnectionPoint(newRoom, dir, parentConnX, parentConnY)
+  local passage = 2
+  
+  if dir == 'north' then
+    -- Nueva habitación está ARRIBA de la padre
+    -- El punto de conexión está en el borde SUR de la nueva habitación
+    -- Alineado horizontalmente con el punto de la padre
+    return {
+      x = parentConnX,
+      y = newRoom.y + newRoom.height + passage - 1  -- Borde sur + pasillo
+    }
+  elseif dir == 'south' then
+    -- Nueva habitación está ABAJO de la padre
+    -- El punto de conexión está en el borde NORTE de la nueva habitación
+    return {
+      x = parentConnX,
+      y = newRoom.y - passage  -- Borde norte - pasillo
+    }
+  elseif dir == 'east' then
+    -- Nueva habitación está a la DERECHA de la padre
+    -- El punto de conexión está en el borde OESTE de la nueva habitación
+    return {
+      x = newRoom.x - passage,  -- Borde oeste - pasillo
+      y = parentConnY
+    }
+  elseif dir == 'west' then
+    -- Nueva habitación está a la IZQUIERDA de la padre
+    -- El punto de conexión está en el borde ESTE de la nueva habitación
+    return {
+      x = newRoom.x + newRoom.width + passage - 1,  -- Borde este + pasillo
+      y = parentConnY
+    }
+  end
+  
+  return {x = newRoom.x, y = newRoom.y}
 end
 
 -- Marcar habitación de salida
