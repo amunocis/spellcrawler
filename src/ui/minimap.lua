@@ -162,6 +162,22 @@ function Minimap:draw(floor)
         love.graphics.setColor(0.2, 0.2, 0.25, 1)
         love.graphics.setLineWidth(1)
         love.graphics.rectangle('line', x, y, math.max(w, 4), math.max(h, 4))
+        
+        -- Dibujar puertas (entradas/salidas) en los bordes
+        for _, conn in ipairs(room.connections) do
+            local doorX, doorY = worldToMinimap(conn.myPoint.x, conn.myPoint.y)
+            
+            -- Determinar en qué borde está la puerta y dibujarla
+            local doorSize = math.max(2, scale)
+            
+            -- La puerta está justo en el borde de la habitación
+            -- Ajustar para que se vea en el borde del rectángulo
+            local bx, by = doorX, doorY
+            
+            -- Color blanco para las puertas
+            love.graphics.setColor(1, 1, 1, 0.9)
+            love.graphics.rectangle('fill', bx - doorSize/2, by - doorSize/2, doorSize, doorSize)
+        end
     end
     
     -- Leyenda
