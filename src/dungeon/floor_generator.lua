@@ -186,6 +186,8 @@ function FloorGenerator:placeConnectedRoom(roomType)
 end
 
 -- Calcular offset basado en dirección
+-- El offset se suma al punto de conexión (que está en el borde de la habitación padre)
+-- para posicionar la nueva habitación con un pasillo de 2 tiles entre ellas
 function FloorGenerator:calculateOffset(direction, roomType, parentRoom)
   local roomDims = {
     ['1x1'] = {w = 10, h = 10},
@@ -195,22 +197,23 @@ function FloorGenerator:calculateOffset(direction, roomType, parentRoom)
   }
   
   local dims = roomDims[roomType]
-  local parentDims = {w = parentRoom.width, h = parentRoom.height}
-  
-  -- Offset para dejar un pasillo de 2 tiles entre habitaciones
-  local passage = 2
+  local passage = 2  -- Pasillo de 2 tiles entre habitaciones
   
   if direction == 'north' then
-    -- Nueva habitación arriba: alinear horizontalmente, colocar arriba con pasillo
+    -- Conectando al norte de la habitación padre
+    -- Nueva habitación va ARRIBA: su borde sur debe quedar 'passage' tiles arriba del punto
     return {x = -dims.w/2, y = -(dims.h + passage)}
   elseif direction == 'south' then
-    -- Nueva habitación abajo: alinear horizontalmente, colocar abajo con pasillo
-    return {x = -dims.w/2, y = parentDims.h + passage}
+    -- Conectando al sur de la habitación padre  
+    -- Nueva habitación va ABAJO: su borde norte debe quedar 'passage' tiles abajo del punto
+    return {x = -dims.w/2, y = passage}
   elseif direction == 'east' then
-    -- Nueva habitación a la derecha: alinear verticalmente, colocar a la derecha con pasillo
-    return {x = parentDims.w + passage, y = -dims.h/2}
+    -- Conectando al este de la habitación padre
+    -- Nueva habitación va a la DERECHA: su borde oeste debe quedar 'passage' tiles a la derecha
+    return {x = passage, y = -dims.h/2}
   elseif direction == 'west' then
-    -- Nueva habitación a la izquierda: alinear verticalmente, colocar a la izquierda con pasillo
+    -- Conectando al oeste de la habitación padre
+    -- Nueva habitación va a la IZQUIERDA: su borde este debe quedar 'passage' tiles a la izquierda
     return {x = -(dims.w + passage), y = -dims.h/2}
   end
   

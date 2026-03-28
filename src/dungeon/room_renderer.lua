@@ -54,21 +54,19 @@ function RoomRenderer:generateTiles(room, theme)
   return tiles
 end
 
--- Verificar si una posición es punto de conexión
+-- Verificar si una posición es punto de conexión real (conectada a otra habitación)
 function RoomRenderer:isConnectionPoint(room, x, y)
-  local points = room:getConnectionPoints()
+  -- Convertir coordenadas locales a coordenadas de mundo
+  local worldX = room.x + (x - 1)  -- x es 1-based local
+  local worldY = room.y + (y - 1)  -- y es 1-based local
   
-  -- Convertir coordenadas locales
-  local localX = x  -- 1-based
-  local localY = y
-  
-  -- Ajustar tolerancia para puertas (más anchas)
-  for _, point in ipairs(points) do
-    local px = point.x - room.x + 1  -- Convertir a local 1-based
-    local py = point.y - room.y + 1
+  -- Revisar conexiones REALES de la habitación (no potenciales)
+  for _, conn in ipairs(room.connections) do
+    local px = conn.myPoint.x
+    local py = conn.myPoint.y
     
-    -- Puerta de 2 tiles de ancho
-    if math.abs(localX - px) <= 1 and math.abs(localY - py) <= 1 then
+    -- Puerta de 2 tiles de ancho (tolerancia de 1 tile en cada dirección)
+    if math.abs(worldX - px) <= 1 and math.abs(worldY - py) <= 1 then
       return true
     end
   end
