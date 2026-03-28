@@ -131,28 +131,13 @@ function Minimap:draw(floor)
         local w = room.width * scale
         local h = room.height * scale
         
-        -- Color según tipo
+        -- Color: verde para habitación actual, gris para el resto
         if room == self.currentRoom then
-            -- Habitación actual (jugador) - brillante
-            love.graphics.setColor(0.2, 0.8, 0.3, 1)
-        elseif room.isEntrance then
-            -- Entrada - azul
-            love.graphics.setColor(0.3, 0.5, 0.9, 0.9)
-        elseif room.isExit then
-            -- Salida - rojo
-            love.graphics.setColor(0.9, 0.3, 0.2, 0.9)
-        elseif room.contentType == 'combat' then
-            -- Combate - naranja
-            love.graphics.setColor(0.8, 0.5, 0.2, 0.8)
-        elseif room.contentType == 'treasure' then
-            -- Tesoro - dorado
-            love.graphics.setColor(0.9, 0.8, 0.2, 0.8)
-        elseif room.contentType == 'boss' then
-            -- Jefe - púrpura
-            love.graphics.setColor(0.8, 0.2, 0.8, 0.9)
+            -- Habitación actual (jugador) - verde brillante
+            love.graphics.setColor(0.2, 0.9, 0.3, 1)
         else
-            -- Vacía/otras - gris
-            love.graphics.setColor(0.5, 0.5, 0.6, 0.7)
+            -- Resto de habitaciones - gris
+            love.graphics.setColor(0.5, 0.5, 0.55, 0.8)
         end
         
         -- Dibujar habitación
