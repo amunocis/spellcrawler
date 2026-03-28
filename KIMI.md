@@ -310,17 +310,32 @@ Después de cambios, verificar:
 
 ## 📋 Checklist de Cierre de Feature
 
-Cuando un desarrollo/feature esté completo y cerrado:
+### Git Flow Workflow
+
+**Nunca trabajar directamente en `main`.** Para cada desarrollo:
 
 ```
-□ 1. Tests pasando (busted)
-□ 2. Probar manualmente que funciona (love .)
-□ 3. Actualizar documentación (docs/HANDOVER.md)
-□ 4. Commit por separado (un commit por feature/fix)
-□ 5. Confirmar con el usuario antes de push
+1. Crear rama desde main:
+   - feature/nombre-descriptivo (nuevas features)
+   - bugfix/nombre-del-bug (correcciones)
+   - chore/nombre (tareas de mantenimiento)
+
+2. Desarrollar en la rama con TDD
+
+3. Cuando esté listo:
+   □ Tests pasando (busted)
+   □ Probar manualmente (love .)
+   □ Actualizar documentación
+   □ Commit por separado (un commit por feature/fix)
+   □ Push de la rama
+   □ Merge a main (después de confirmación del usuario)
 ```
 
-**REGLA DE ORO:** Un feature = Un commit. Nunca mezclar múltiples features en un solo commit.
+**REGLAS DE ORO:**
+- Un feature = Un commit
+- Nunca mezclar múltiples features en un solo commit
+- Nunca pushear directo a main
+- Todo pasa por PR/merge con aprobación
 
 ---
 
