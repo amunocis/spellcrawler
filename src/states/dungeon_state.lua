@@ -553,15 +553,28 @@ function DungeonState:updateCurrentRoom()
                 if self.minimap then
                     self.minimap:setCurrentRoom(room)
                 end
-                -- TEST: Iniciar ciclo de partículas moradas (4 ciclos durante 2 segundos)
-                self:startRoomEnterParticleCycle(room)
+                -- Manejar transición de estado de la habitación
+                self:handleRoomStateTransition(room)
             end
             break
         end
     end
 end
 
--- Iniciar ciclo de partículas al entrar a una habitación (TEST)
+-- Manejar transición de estado cuando el jugador entra a una habitación
+function DungeonState:handleRoomStateTransition(room)
+    -- Si la habitación está en idle, activarla
+    if room.state == 'idle' then
+        room:setState('active')
+        
+        -- Solo spawnear enemigos si nunca se han spawneado
+        if room:canSpawnEnemies() then
+            self:startRoomEnterParticleCycle(room)
+        end
+    end
+end
+
+-- Iniciar ciclo de partículas al entrar a una habitación
 -- 4 ciclos durante 2 segundos (cada 0.5s)
 -- Las posiciones son fijas - ahí aparecerán los enemigos después
 function DungeonState:startRoomEnterParticleCycle(room)
@@ -735,24 +748,27 @@ end
 
 -- Verificar si la habitación actual está limpia (sin enemigos)
 function DungeonState:checkRoomClear()
-    if not self.currentRoom or not self.currentRoom.isConfinementActive then
+    if not self.currentRoom then
         return
     end
     
     local room = self.currentRoom
-    local aliveEnemies = 0
     
-    if room.enemies then
-        for _, enemy in ipairs(room.enemies) do
-            if not enemy.dead then
-                aliveEnemies = aliveEnemies + 1
-            end
-        end
+    -- Solo verificar si la habitación está activa
+    if room.state ~= 'active' then
+        return
     end
     
-    -- Si no quedan enemigos, liberar confinamiento
-    if aliveEnemies == 0 then
-        self:removeConfinementBlocks(room)
+    -- Verificar si todos los enemigos están muertos
+    if room:areAllEnemiesDead() then
+        -- Cambiar estado a clear
+        room:setState('clear')
+        
+        -- Liberar confinamiento si estaba activo
+        if room.isConfinementActive then
+            self:removeConfinementBlocks(room)
+        end
+        
         -- Efecto visual de liberación
         self:createRoomClearEffect(room)
     end

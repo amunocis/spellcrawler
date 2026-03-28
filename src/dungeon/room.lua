@@ -30,6 +30,8 @@ function Room:new(roomType, x, y)
     connections = {},  -- Conexiones a otras habitaciones
     usedConnectionPoints = {},  -- Puntos de conexión ya utilizados
     isConfinementActive = false,
+    state = 'idle',  -- Estados: 'idle', 'active', 'clear'
+    enemiesSpawned = false,  -- Para evitar spawn múltiple
   }
   
   setmetatable(instance, self)
@@ -208,6 +210,37 @@ function Room:distanceTo(other)
   local dx = c2.x - c1.x
   local dy = c2.y - c1.y
   return math.sqrt(dx * dx + dy * dy)
+end
+
+-- Establecer estado de la habitación
+function Room:setState(newState)
+  if newState == 'idle' or newState == 'active' or newState == 'clear' then
+    self.state = newState
+  end
+end
+
+-- Verificar si la habitación puede spawnear enemigos
+-- Solo spawnea si está en idle y no ha spawneado antes
+function Room:canSpawnEnemies()
+  return self.state == 'idle' and not self.enemiesSpawned
+end
+
+-- Marcar que los enemigos han sido spawneados
+function Room:markEnemiesSpawned()
+  self.enemiesSpawned = true
+end
+
+-- Verificar si todos los enemigos están muertos
+function Room:areAllEnemiesDead()
+  if not self.enemies or #self.enemies == 0 then
+    return true
+  end
+  for _, enemy in ipairs(self.enemies) do
+    if not enemy.dead then
+      return false
+    end
+  end
+  return true
 end
 
 return Room
