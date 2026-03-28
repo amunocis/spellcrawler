@@ -180,11 +180,20 @@ function Minimap:draw(floor)
         end
     end
     
-    -- Leyenda
-    love.graphics.setColor(0.7, 0.7, 0.8, 1)
-    love.graphics.print("You", self.screenX + 5, self.screenY + self.height - 15)
-    love.graphics.setColor(0.2, 0.8, 0.3, 1)
-    love.graphics.rectangle('fill', self.screenX + 30, self.screenY + self.height - 13, 6, 6)
+    -- Info de la habitación actual
+    if self.currentRoom then
+        local roomName = ""
+        if self.currentRoom.isEntrance then
+            roomName = "Entrance"
+        elseif self.currentRoom.isExit then
+            roomName = "Exit"
+        else
+            roomName = self.currentRoom.contentType:gsub("^%l", string.upper)
+        end
+        
+        love.graphics.setColor(0.2, 0.8, 0.3, 1)
+        love.graphics.print(roomName, self.screenX + 5, self.screenY + self.height - 15)
+    end
 end
 
 return Minimap
