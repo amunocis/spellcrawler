@@ -12,7 +12,7 @@ end
 
 function MenuState:enter()
     print("MenuState: enter")
-    self.options = {'Nueva Partida', 'Cargar Partida', 'Opciones', 'Salir'}
+    self.options = {'Nueva Partida', 'Cargar Partida', 'Opciones', 'Test Gamepad', 'Salir'}
     self.selected = 1
 end
 
@@ -55,6 +55,8 @@ function MenuState:selectOption(index)
     elseif option == 'Opciones' then
         -- TODO: Menú de opciones
         print("Opciones aún no implementadas")
+    elseif option == 'Test Gamepad' then
+        stateManager:switch('input_test')
     elseif option == 'Salir' then
         love.event.quit()
     end

@@ -10,6 +10,7 @@ local StateManager = require('src.core.state_manager')
 local MenuState = require('src.states.menu_state')
 local HubState = require('src.states.hub_state')
 local DungeonState = require('src.states.dungeon_state')
+local InputTestState = require('src.states.input_test_state')
 
 function love.load()
     -- Inicializar Registry (único global implícito)
@@ -31,6 +32,7 @@ function love.load()
     stateManager:register('menu', MenuState)
     stateManager:register('hub', HubState)
     stateManager:register('dungeon', DungeonState)
+    stateManager:register('input_test', InputTestState)
 
     -- Iniciar en el menú
     stateManager:switch('menu')
