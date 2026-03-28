@@ -90,8 +90,7 @@ function DungeonState:enter(seed)
     -- Sistema de combate
     self.combatSystem = CombatSystem:new()
 
-    -- Spawnear enemigos en cada habitación de combate
-    self:spawnEnemiesInRooms()
+    -- NOTA: Enemigos se spawnearán al entrar a habitaciones (desactivado por ahora)
 
     -- Cámara
     self.cameraX = 0
@@ -99,6 +98,9 @@ function DungeonState:enter(seed)
     
     -- Habitación actual del jugador
     self.currentRoom = entranceRoom
+    
+    -- La entrada comienza como 'clear' (sin enemigos)
+    entranceRoom:setState('clear')
     
     -- Minimapa
     self.minimap = Minimap:new()
@@ -219,6 +221,9 @@ function DungeonState:spawnEnemiesInRoom(room, count, isBoss)
         spawnPoints[i], spawnPoints[j] = spawnPoints[j], spawnPoints[i]
     end
     
+    -- Track enemies for this room
+    room.enemies = room.enemies or {}
+    
     -- Spawnear enemigos
     for i = 1, math.min(count, #spawnPoints) do
         local point = spawnPoints[i]
@@ -230,6 +235,10 @@ function DungeonState:spawnEnemiesInRoom(room, count, isBoss)
             enemy = EnemyFactory:createBat(point.x, point.y)
         end
         
+        -- Track which room this enemy belongs to
+        enemy.room = room
+        table.insert(room.enemies, enemy)
+        
         self.combatSystem:addEnemy(enemy)
         self.world:add(enemy, enemy.transform.x, enemy.transform.y, enemy.collider.w, enemy.collider.h)
     end
@@ -238,6 +247,18 @@ end
 function DungeonState:updateEnemies(dt)
     for _, enemy in ipairs(self.combatSystem.enemies) do
         if not enemy.dead and enemy.behavior then
+            -- Check dizzy timer - enemigo está "aturdido" y no hace nada
+            if enemy.dizzyTimer and enemy.dizzyTimer > 0 then
+                enemy.dizzyTimer = enemy.dizzyTimer - dt
+                -- No se mueve ni actualiza comportamiento mientras está dizzy
+                goto continue
+            end
+            
+            -- Verificar si el enemigo está fuera de su habitación
+            if enemy.room then
+                enemy = self:checkEnemyInRoom(enemy)
+            end
+            
             -- Calcular nueva posición deseada
             local oldX, oldY = enemy.transform.x, enemy.transform.y
             enemy.behavior:update(enemy, self.player, dt)
@@ -250,15 +271,19 @@ function DungeonState:updateEnemies(dt)
             newX, newY = self:clampToWorldBounds(newX, newY, enemy.collider.w, enemy.collider.h)
 
             local actualX, actualY, cols, len = self.world:move(enemy, newX, newY, function(item, other)
-                -- Enemigos colisionan con paredes y jugador
+                -- Enemigos colisionan con paredes, jugador y bloques de confinamiento
                 if other == self.player then
+                    return 'touch'
+                end
+                -- Bloques de confinamiento (puertas bloqueadas)
+                if other.type == 'confinement_block' then
                     return 'touch'
                 end
                 -- Ignorar otros enemigos
                 if other.transform then
                     return 'cross'
                 end
-                return 'touch' -- Paredes
+                return 'touch' -- Paredes y otros objetos
             end)
 
             enemy.transform.x = actualX
@@ -272,7 +297,37 @@ function DungeonState:updateEnemies(dt)
                 end
             end
         end
+        ::continue::
     end
+end
+
+-- Verificar si el enemigo está dentro de su habitación asignada
+-- Si está fuera, forzarlo a volver
+function DungeonState:checkEnemyInRoom(enemy)
+    local room = enemy.room
+    if not room then return enemy end
+    
+    local tileSize = 40
+    local ex = enemy.transform.x + enemy.collider.w / 2
+    local ey = enemy.transform.y + enemy.collider.h / 2
+    local tx = ex / tileSize
+    local ty = ey / tileSize
+    
+    -- Verificar si está dentro de la habitación (con margen pequeño)
+    local margin = 0.5
+    if tx < room.x - margin or tx > room.x + room.width + margin or
+       ty < room.y - margin or ty > room.y + room.height + margin then
+        -- Está fuera, forzar vuelta al centro de la habitación
+        local center = room:getCenter()
+        enemy.transform.x = center.x * tileSize - enemy.collider.w / 2
+        enemy.transform.y = center.y * tileSize - enemy.collider.h / 2
+        -- Resetear comportamiento
+        if enemy.behavior and enemy.behavior.reset then
+            enemy.behavior:reset()
+        end
+    end
+    
+    return enemy
 end
 
 function DungeonState:handlePlayerHitByEnemy(enemy)
@@ -326,6 +381,9 @@ function DungeonState:handleKilledEnemies(killed)
             y = enemy.transform.y
         })
     end
+    
+    -- Verificar si la habitación está limpia
+    self:checkRoomClear()
 end
 
 function DungeonState:exit()
@@ -388,6 +446,9 @@ function DungeonState:update(dt)
 
     -- Actualizar partículas
     self:updateParticles(dt)
+    
+    -- Actualizar ciclos de partículas de habitación
+    self:updateRoomParticleCycles(dt)
 
     -- Cambiar slot de hechizo
     if input:pressed('spell_1') then self.selectedSlot = 1 end
@@ -495,9 +556,268 @@ function DungeonState:updateCurrentRoom()
                 if self.minimap then
                     self.minimap:setCurrentRoom(room)
                 end
+                -- Manejar transición de estado de la habitación
+                self:handleRoomStateTransition(room)
             end
             break
         end
+    end
+end
+
+-- Manejar transición de estado cuando el jugador entra a una habitación
+function DungeonState:handleRoomStateTransition(room)
+    -- Si la habitación está en idle, procesar entrada
+    if room.state == 'idle' then
+        -- Primero verificar si debe spawnear enemigos (antes de cambiar estado)
+        local shouldSpawn = room:canSpawnEnemies() and not room.isEntrance and not room.isExit
+        
+        if shouldSpawn then
+            -- Cambiar estado a active y spawnear enemigos
+            room:setState('active')
+            self:startRoomEnterParticleCycle(room)
+        else
+            -- Habitación sin enemigos (entrada, salida, tesoro) - ir directo a clear
+            room:markEnemiesSpawned()
+            room:setState('clear')
+        end
+    end
+end
+
+-- Iniciar ciclo de partículas al entrar a una habitación
+-- 4 ciclos durante 2 segundos (cada 0.5s)
+-- Las posiciones son fijas - ahí aparecerán los enemigos después
+function DungeonState:startRoomEnterParticleCycle(room)
+    local tileSize = 40
+    
+    -- Generar 5 posiciones fijas donde aparecerán los enemigos
+    room.enemySpawnPositions = {}
+    for i = 1, 5 do
+        local offsetX = math.random(2, room.width - 3)
+        local offsetY = math.random(2, room.height - 3)
+        table.insert(room.enemySpawnPositions, {
+            x = (room.x + offsetX) * tileSize,
+            y = (room.y + offsetY) * tileSize
+        })
+    end
+    
+    room.particleCycle = {
+        remainingCycles = 4,
+        timer = 0,
+        interval = 0.5
+    }
+    
+    -- Crear primera oleada inmediatamente
+    self:createRoomEnterParticles(room)
+end
+
+-- Crear partículas moradas en las posiciones de spawn de enemigos
+function DungeonState:createRoomEnterParticles(room)
+    if not room.enemySpawnPositions then return end
+    
+    -- Crear explosión de partículas en cada posición de spawn
+    for _, pos in ipairs(room.enemySpawnPositions) do
+        for j = 1, 8 do
+            local angle = (j / 8) * math.pi * 2
+            local speed = math.random(50, 150)
+            table.insert(self.particles, {
+                x = pos.x,
+                y = pos.y,
+                vx = math.cos(angle) * speed,
+                vy = math.sin(angle) * speed,
+                lifetime = 0.5,  -- 0.5 segundos
+                color = {0.7, 0.3, 0.9},  -- Morado
+                size = math.random(3, 6)  -- Tamaño aleatorio
+            })
+        end
+    end
+end
+
+-- Actualizar ciclos de partículas de habitación
+function DungeonState:updateRoomParticleCycles(dt)
+    for _, room in ipairs(self.floor.rooms) do
+        if room.particleCycle then
+            room.particleCycle.timer = room.particleCycle.timer + dt
+            
+            -- Si pasó el intervalo, crear otra oleada
+            if room.particleCycle.timer >= room.particleCycle.interval then
+                room.particleCycle.timer = room.particleCycle.timer - room.particleCycle.interval
+                room.particleCycle.remainingCycles = room.particleCycle.remainingCycles - 1
+                
+                -- Crear otra oleada de partículas
+                if room.particleCycle.remainingCycles > 0 then
+                    self:createRoomEnterParticles(room)
+                else
+                    -- Último ciclo terminado - spawnear enemigos
+                    self:spawnEnemiesAtPositions(room)
+                end
+                
+                -- Si no quedan ciclos, limpiar
+                if room.particleCycle.remainingCycles <= 0 then
+                    room.particleCycle = nil
+                end
+            end
+        end
+    end
+end
+
+-- Spawnear enemigos en las posiciones marcadas por las partículas
+function DungeonState:spawnEnemiesAtPositions(room)
+    if not room.enemySpawnPositions then return end
+    
+    -- Track enemies for this room
+    room.enemies = room.enemies or {}
+    
+    -- Spawnear enemigos en cada posición marcada
+    for _, pos in ipairs(room.enemySpawnPositions) do
+        local enemy = EnemyFactory:createBat(pos.x, pos.y)
+        
+        -- Track which room this enemy belongs to
+        enemy.room = room
+        table.insert(room.enemies, enemy)
+        
+        self.combatSystem:addEnemy(enemy)
+        self.world:add(enemy, enemy.transform.x, enemy.transform.y, enemy.collider.w, enemy.collider.h)
+    end
+    
+    -- Marcar que los enemigos han sido spawneados
+    room:markEnemiesSpawned()
+    
+    -- Limpiar posiciones (ya no se necesitan)
+    room.enemySpawnPositions = nil
+end
+
+-- Activar confinamiento si la habitación tiene enemigos vivos
+-- Usa un delay para permitir que el jugador entre completamente
+function DungeonState:activateConfinementIfNeeded(room)
+    -- Solo activar en habitaciones de combate o jefe
+    if room.contentType ~= 'combat' and room.contentType ~= 'boss' then
+        return
+    end
+    
+    -- No activar si ya está activo o programado
+    if room.isConfinementActive or room.confinementScheduled then
+        return
+    end
+    
+    -- Programar activación con delay (siempre para habitaciones de combate/jefe)
+    room.confinementScheduled = true
+    room.confinementTimer = 0.5
+end
+
+-- Actualizar timers de confinamiento pendiente
+function DungeonState:updateConfinementTimers(dt)
+    for _, room in ipairs(self.floor.rooms) do
+        if room.confinementScheduled and room.confinementTimer > 0 then
+            room.confinementTimer = room.confinementTimer - dt
+            if room.confinementTimer <= 0 and not room.isConfinementActive then
+                room.isConfinementActive = true
+                self:addConfinementBlocks(room)
+            end
+        end
+    end
+end
+
+-- Añadir bloques de colisión en las puertas para confinar al jugador
+function DungeonState:addConfinementBlocks(room)
+    -- Remover bloques anteriores si existen
+    self:removeConfinementBlocks(room)
+    
+    room.confinementBlocks = {}
+    local tileSize = 40
+    
+    -- Crear bloques de colisión en cada conexión de la habitación
+    -- Los puntos de conexión están en coordenadas de mundo (tiles)
+    for _, conn in ipairs(room.connections) do
+        local px = conn.myPoint.x
+        local py = conn.myPoint.y
+        
+        -- El punto de conexión está justo en el borde de la habitación
+        -- Creamos un bloque de 2x2 tiles para bloquear toda la puerta
+        local block = {
+            x = px * tileSize,
+            y = py * tileSize,
+            w = tileSize * 2,  -- 2 tiles de ancho
+            h = tileSize * 2,  -- 2 tiles de alto
+            type = 'confinement_block',
+            room = room
+        }
+        
+        table.insert(room.confinementBlocks, block)
+        self.world:add(block, block.x, block.y, block.w, block.h)
+    end
+end
+
+-- Remover bloques de confinamiento
+function DungeonState:removeConfinementBlocks(room)
+    if room.confinementBlocks then
+        for _, block in ipairs(room.confinementBlocks) do
+            local ok, err = pcall(function() self.world:remove(block) end)
+        end
+        room.confinementBlocks = nil
+    end
+    room.isConfinementActive = false
+end
+
+-- Verificar si la habitación actual está limpia (sin enemigos)
+function DungeonState:checkRoomClear()
+    if not self.currentRoom then
+        return
+    end
+    
+    local room = self.currentRoom
+    
+    -- Solo verificar si la habitación está activa
+    if room.state ~= 'active' then
+        return
+    end
+    
+    -- Si los enemigos nunca se han spawneado, no verificar
+    if not room.enemiesSpawned then
+        return
+    end
+    
+    -- Si no hay lista de enemigos, algo está mal - no marcar como clear
+    if not room.enemies then
+        return
+    end
+    
+    -- Verificar si todos los enemigos están muertos
+    local allDead = true
+    for _, enemy in ipairs(room.enemies) do
+        if not enemy.dead then
+            allDead = false
+            break
+        end
+    end
+    
+    if allDead then
+        -- Cambiar estado a clear
+        room:setState('clear')
+        
+        -- Efecto visual de liberación
+        self:createRoomClearEffect(room)
+    end
+end
+
+-- Efecto visual cuando se limpia una habitación
+function DungeonState:createRoomClearEffect(room)
+    local tileSize = 40
+    local centerX = (room.x + room.width / 2) * tileSize
+    local centerY = (room.y + room.height / 2) * tileSize
+    
+    -- Partículas doradas en el centro
+    for i = 1, 20 do
+        local angle = (i / 20) * math.pi * 2
+        local speed = math.random(100, 200)
+        table.insert(self.particles, {
+            x = centerX,
+            y = centerY,
+            vx = math.cos(angle) * speed,
+            vy = math.sin(angle) * speed,
+            lifetime = 1.0,
+            color = {0.9, 0.8, 0.2},
+            size = math.random(3, 5)
+        })
     end
 end
 
@@ -687,6 +1007,7 @@ function DungeonState:draw()
 
     -- Dibujar habitaciones generadas proceduralmente
     -- Nota: la cámara ya se aplicó con translate, pasamos 0,0
+    -- Dibujar habitaciones
     if self.floor and self.roomRenderer then
         for _, room in ipairs(self.floor.rooms) do
             if self.roomTiles[room] then
@@ -723,7 +1044,11 @@ function DungeonState:draw()
             local ey = enemy.transform.y + (enemy.collider.offsetY or 0)
 
             -- Color según tipo
-            if enemy.type == 'bat' then
+            local isDizzy = enemy.dizzyTimer and enemy.dizzyTimer > 0
+            if isDizzy then
+                -- Efecto visual cuando está dizzy (más claro/amarillo)
+                love.graphics.setColor(0.9, 0.9, 0.4) -- Amarillo claro
+            elseif enemy.type == 'bat' then
                 love.graphics.setColor(0.6, 0.2, 0.8) -- Morado
             elseif enemy.type == 'golem' then
                 love.graphics.setColor(0.5, 0.5, 0.5) -- Gris
@@ -732,6 +1057,13 @@ function DungeonState:draw()
             end
 
             love.graphics.rectangle('fill', ex, ey, enemy.collider.w, enemy.collider.h)
+            
+            -- Indicador visual de dizzy (estrellas pequeñas girando)
+            if isDizzy then
+                love.graphics.setColor(1, 1, 0.5, 0.8)
+                local starOffset = math.sin(love.timer.getTime() * 10) * 3
+                love.graphics.circle('fill', ex + enemy.collider.w/2, ey - 5 + starOffset, 3)
+            end
 
             -- Borde
             love.graphics.setColor(0.2, 0.2, 0.2)

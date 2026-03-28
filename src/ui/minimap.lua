@@ -164,6 +164,21 @@ function Minimap:draw(floor)
             love.graphics.rectangle('fill', bx - doorSize/2, by - doorSize/2, doorSize, doorSize)
         end
     end
+    
+    -- Mostrar estado de la habitación actual
+    if self.currentRoom then
+        local stateText = string.upper(self.currentRoom.state or 'IDLE')
+        local stateColor = {0.7, 0.7, 0.7}  -- Gris por defecto (idle)
+        
+        if self.currentRoom.state == 'active' then
+            stateColor = {0.9, 0.3, 0.2}  -- Rojo para active
+        elseif self.currentRoom.state == 'clear' then
+            stateColor = {0.2, 0.8, 0.3}  -- Verde para clear
+        end
+        
+        love.graphics.setColor(stateColor[1], stateColor[2], stateColor[3], 1)
+        love.graphics.print(stateText, self.screenX + 5, self.screenY + self.height - 15)
+    end
 end
 
 return Minimap

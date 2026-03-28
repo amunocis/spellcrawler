@@ -8,7 +8,8 @@ local PatrolBehavior = require('src.enemies.behaviors.patrol_behavior')
 
 local EnemyFactory = {}
 
-function EnemyFactory:createBat(x, y)
+function EnemyFactory:createBat(x, y, dizzyDuration)
+    dizzyDuration = dizzyDuration or 1.0  -- Default 1 segundo para murciélagos
     return {
         type = 'bat',
         transform = Transform:new(x, y),
@@ -21,11 +22,14 @@ function EnemyFactory:createBat(x, y)
             offsetX = 8,
             offsetY = 8
         },
-        damage = 8 -- Reducido de 10
+        damage = 8, -- Reducido de 10
+        dizzyTime = dizzyDuration,  -- Tiempo total de dizzy
+        dizzyTimer = dizzyDuration  -- Timer que cuenta hacia atrás
     }
 end
 
-function EnemyFactory:createGolem(x, y)
+function EnemyFactory:createGolem(x, y, dizzyDuration)
+    dizzyDuration = dizzyDuration or 2.0  -- Default 2 segundos para golems
     return {
         type = 'golem',
         transform = Transform:new(x, y),
@@ -38,7 +42,9 @@ function EnemyFactory:createGolem(x, y)
             offsetX = 16,
             offsetY = 16
         },
-        damage = 20 -- Reducido de 25
+        damage = 20, -- Reducido de 25
+        dizzyTime = dizzyDuration,  -- Tiempo total de dizzy
+        dizzyTimer = dizzyDuration  -- Timer que cuenta hacia atrás
     }
 end
 

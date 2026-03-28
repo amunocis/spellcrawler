@@ -131,7 +131,8 @@ function RoomRenderer:createCollisionObjects(room, tiles)
 end
 
 -- Dibujar una habitación
-function RoomRenderer:draw(room, tiles, cameraX, cameraY)
+-- isCurrentRoom: si es true, el piso se pinta de rojo pastel (TEST)
+function RoomRenderer:draw(room, tiles, cameraX, cameraY, isCurrentRoom)
   local tileSize = TILE_SIZE
   
   for y = 1, #tiles do
@@ -142,10 +143,11 @@ function RoomRenderer:draw(room, tiles, cameraX, cameraY)
       
       -- Color según tipo de tile
       if tile == 'floor' then
-        love.graphics.setColor(0.2, 0.2, 0.25)
+        love.graphics.setColor(0.2, 0.2, 0.25)  -- Gris normal
       elseif tile == 'wall' then
         love.graphics.setColor(0.4, 0.35, 0.3)
       elseif tile == 'door' then
+        -- Puerta marrón normal (confinamiento desactivado por ahora)
         love.graphics.setColor(0.6, 0.4, 0.2)
       elseif tile == 'rock' then
         love.graphics.setColor(0.35, 0.3, 0.25)
