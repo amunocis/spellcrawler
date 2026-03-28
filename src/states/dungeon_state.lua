@@ -571,15 +571,14 @@ function DungeonState:handleRoomStateTransition(room)
         -- Primero verificar si debe spawnear enemigos (antes de cambiar estado)
         local shouldSpawn = room:canSpawnEnemies() and not room.isEntrance and not room.isExit
         
-        -- Cambiar estado a active
-        room:setState('active')
-        
-        -- Spawnear enemigos si corresponde
         if shouldSpawn then
+            -- Cambiar estado a active y spawnear enemigos
+            room:setState('active')
             self:startRoomEnterParticleCycle(room)
         else
-            -- Marcar como spawneado (para que no intente de nuevo)
+            -- Habitación sin enemigos (entrada, salida, tesoro) - ir directo a clear
             room:markEnemiesSpawned()
+            room:setState('clear')
         end
     end
 end
