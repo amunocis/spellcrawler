@@ -557,27 +557,19 @@ end
 -- Activar confinamiento si la habitación tiene enemigos vivos
 -- Usa un delay para permitir que el jugador entre completamente
 function DungeonState:activateConfinementIfNeeded(room)
-    -- Solo activar en habitaciones de combate o jefe que tengan enemigos
+    -- Solo activar en habitaciones de combate o jefe
     if room.contentType ~= 'combat' and room.contentType ~= 'boss' then
         return
     end
     
-    -- Contar enemigos vivos en esta habitación
-    local aliveEnemies = 0
-    if room.enemies then
-        for _, enemy in ipairs(room.enemies) do
-            if not enemy.dead then
-                aliveEnemies = aliveEnemies + 1
-            end
-        end
+    -- No activar si ya está activo o programado
+    if room.isConfinementActive or room.confinementScheduled then
+        return
     end
     
-    -- Si hay enemigos vivos, programar activación con delay
-    if aliveEnemies > 0 and not room.confinementScheduled then
-        room.confinementScheduled = true
-        -- Delay de 0.5 segundos para permitir entrada completa
-        room.confinementTimer = 0.5
-    end
+    -- Programar activación con delay (siempre para habitaciones de combate/jefe)
+    room.confinementScheduled = true
+    room.confinementTimer = 0.5
 end
 
 -- Actualizar timers de confinamiento pendiente
