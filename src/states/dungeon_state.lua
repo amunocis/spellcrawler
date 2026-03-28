@@ -435,6 +435,9 @@ function DungeonState:update(dt)
 
     -- Actualizar partículas
     self:updateParticles(dt)
+    
+    -- Actualizar ciclos de partículas de habitación
+    self:updateRoomParticleCycles(dt)
 
     -- Cambiar slot de hechizo
     if input:pressed('spell_1') then self.selectedSlot = 1 end
@@ -542,19 +545,31 @@ function DungeonState:updateCurrentRoom()
                 if self.minimap then
                     self.minimap:setCurrentRoom(room)
                 end
-                -- TEST: Crear partículas moradas en la habitación
-                self:createRoomEnterParticles(room)
+                -- TEST: Iniciar ciclo de partículas moradas (4 ciclos durante 2 segundos)
+                self:startRoomEnterParticleCycle(room)
             end
             break
         end
     end
 end
 
+-- Iniciar ciclo de partículas al entrar a una habitación (TEST)
+-- 4 ciclos durante 2 segundos (cada 0.5s)
+function DungeonState:startRoomEnterParticleCycle(room)
+    room.particleCycle = {
+        remainingCycles = 4,
+        timer = 0,
+        interval = 0.5
+    }
+    -- Crear primera oleada inmediatamente
+    self:createRoomEnterParticles(room)
+end
+
 -- Crear partículas moradas al entrar a una habitación (TEST)
 function DungeonState:createRoomEnterParticles(room)
     local tileSize = 40
     
-    -- Crear 5 partículas en posiciones aleatorias dentro de la habitación
+    -- Crear 5 explosiones en posiciones aleatorias dentro de la habitación
     for i = 1, 5 do
         -- Posición aleatoria dentro de la habitación (evitando bordes)
         local offsetX = math.random(2, room.width - 3)
@@ -572,10 +587,35 @@ function DungeonState:createRoomEnterParticles(room)
                 y = py,
                 vx = math.cos(angle) * speed,
                 vy = math.sin(angle) * speed,
-                lifetime = 2.0,  -- 2 segundos
+                lifetime = 0.5,  -- 0.5 segundos
                 color = {0.7, 0.3, 0.9},  -- Morado
                 size = math.random(3, 6)  -- Tamaño aleatorio
             })
+        end
+    end
+end
+
+-- Actualizar ciclos de partículas de habitación
+function DungeonState:updateRoomParticleCycles(dt)
+    for _, room in ipairs(self.floor.rooms) do
+        if room.particleCycle then
+            room.particleCycle.timer = room.particleCycle.timer + dt
+            
+            -- Si pasó el intervalo, crear otra oleada
+            if room.particleCycle.timer >= room.particleCycle.interval then
+                room.particleCycle.timer = room.particleCycle.timer - room.particleCycle.interval
+                room.particleCycle.remainingCycles = room.particleCycle.remainingCycles - 1
+                
+                -- Crear otra oleada de partículas
+                if room.particleCycle.remainingCycles > 0 then
+                    self:createRoomEnterParticles(room)
+                end
+                
+                -- Si no quedan ciclos, limpiar
+                if room.particleCycle.remainingCycles <= 0 then
+                    room.particleCycle = nil
+                end
+            end
         end
     end
 end
