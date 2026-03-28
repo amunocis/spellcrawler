@@ -670,6 +670,9 @@ function DungeonState:spawnEnemiesAtPositions(room)
         self.world:add(enemy, enemy.transform.x, enemy.transform.y, enemy.collider.w, enemy.collider.h)
     end
     
+    -- Marcar que los enemigos han sido spawneados
+    room:markEnemiesSpawned()
+    
     -- Limpiar posiciones (ya no se necesitan)
     room.enemySpawnPositions = nil
 end
@@ -759,15 +762,28 @@ function DungeonState:checkRoomClear()
         return
     end
     
+    -- Si los enemigos nunca se han spawneado, no verificar
+    if not room.enemiesSpawned then
+        return
+    end
+    
+    -- Si no hay lista de enemigos, algo está mal - no marcar como clear
+    if not room.enemies then
+        return
+    end
+    
     -- Verificar si todos los enemigos están muertos
-    if room:areAllEnemiesDead() then
+    local allDead = true
+    for _, enemy in ipairs(room.enemies) do
+        if not enemy.dead then
+            allDead = false
+            break
+        end
+    end
+    
+    if allDead then
         -- Cambiar estado a clear
         room:setState('clear')
-        
-        -- Liberar confinamiento si estaba activo
-        if room.isConfinementActive then
-            self:removeConfinementBlocks(room)
-        end
         
         -- Efecto visual de liberación
         self:createRoomClearEffect(room)
