@@ -190,7 +190,32 @@ function FloorGenerator:placeConnectedRoom(roomType)
   connection.used = true
   table.remove(self.availableConnections, connIndex)
   
+  -- Intentar crear conexiones adicionales con habitaciones cercanas
+  -- Esto permite ciclos y múltiples puertas por habitación
+  self:tryConnectToNearbyRooms(newRoom)
+  
   return true
+end
+
+-- Intentar conectar una habitación con otras habitaciones cercanas
+function FloorGenerator:tryConnectToNearbyRooms(room)
+  local maxConnections = 4  -- Máximo de conexiones adicionales por habitación
+  local connectionsMade = 0
+  
+  for _, otherRoom in ipairs(self.placedRooms) do
+    if otherRoom ~= room and connectionsMade < maxConnections then
+      -- Verificar si podemos conectar estas habitaciones
+      local myPoint, otherPoint = room:canConnectTo(otherRoom)
+      
+      if myPoint and otherPoint then
+        -- Crear la conexión bidireccional
+        room:connectTo(otherRoom, myPoint, otherPoint)
+        otherRoom:connectTo(room, otherPoint, myPoint)
+        
+        connectionsMade = connectionsMade + 1
+      end
+    end
+  end
 end
 
 -- Calcular offset basado en dirección

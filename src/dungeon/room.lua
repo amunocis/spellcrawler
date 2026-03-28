@@ -28,6 +28,7 @@ function Room:new(roomType, x, y)
     isExit = false,
     contentType = 'empty',
     connections = {},  -- Conexiones a otras habitaciones
+    usedConnectionPoints = {},  -- Puntos de conexión ya utilizados
     isConfinementActive = false,
   }
   
@@ -116,6 +117,80 @@ function Room:connectTo(otherRoom, myConnectionPoint, otherConnectionPoint)
     myPoint = myConnectionPoint,
     otherPoint = otherConnectionPoint
   })
+  -- Marcar el punto de conexión como usado
+  self:markConnectionPointUsed(myConnectionPoint)
+end
+
+-- Marcar un punto de conexión como usado
+function Room:markConnectionPointUsed(point)
+  -- Usar una clave única basada en coordenadas (redondeadas para evitar problemas de precisión)
+  local key = string.format("%.1f,%.1f", point.x, point.y)
+  self.usedConnectionPoints[key] = true
+end
+
+-- Verificar si un punto de conexión ya fue usado
+function Room:isConnectionPointUsed(point)
+  local key = string.format("%.1f,%.1f", point.x, point.y)
+  return self.usedConnectionPoints[key] == true
+end
+
+-- Obtener puntos de conexión disponibles (no usados)
+function Room:getAvailableConnectionPoints()
+  local allPoints = self:getConnectionPoints()
+  local available = {}
+  
+  for _, point in ipairs(allPoints) do
+    if not self:isConnectionPointUsed(point) then
+      table.insert(available, point)
+    end
+  end
+  
+  return available
+end
+
+-- Verificar si dos habitaciones están lo suficientemente cerca para conectarse
+-- Retorna el punto de conexión en esta habitación si están alineadas
+function Room:canConnectTo(otherRoom, passageWidth)
+  passageWidth = passageWidth or 2
+  local tolerance = 2  -- Tolerancia de alineación en tiles
+  
+  local myPoints = self:getAvailableConnectionPoints()
+  local otherPoints = otherRoom:getAvailableConnectionPoints()
+  
+  for _, myPoint in ipairs(myPoints) do
+    for _, otherPoint in ipairs(otherPoints) do
+      -- Verificar si los puntos están en direcciones opuestas
+      local oppositeDirs = {
+        north = 'south',
+        south = 'north',
+        east = 'west',
+        west = 'east'
+      }
+      
+      if oppositeDirs[myPoint.dir] == otherPoint.dir then
+        -- Verificar si están alineados y cercanos
+        local expectedDist = passageWidth
+        local dx = math.abs(myPoint.x - otherPoint.x)
+        local dy = math.abs(myPoint.y - otherPoint.y)
+        
+        -- Dependiendo de la dirección, verificar alineación
+        local aligned = false
+        if myPoint.dir == 'north' or myPoint.dir == 'south' then
+          -- Alineación horizontal (misma X)
+          aligned = dx <= tolerance and math.abs(dy - expectedDist) <= tolerance
+        else
+          -- Alineación vertical (misma Y)
+          aligned = dy <= tolerance and math.abs(dx - expectedDist) <= tolerance
+        end
+        
+        if aligned then
+          return myPoint, otherPoint
+        end
+      end
+    end
+  end
+  
+  return nil, nil
 end
 
 -- Obtener centro de la habitación

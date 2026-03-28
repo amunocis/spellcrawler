@@ -134,4 +134,70 @@ describe('Room', function()
       end
     end)
   end)
+  
+  describe('connection points', function()
+    it('should track used connection points', function()
+      local room = Room:new('1x1', 0, 0)
+      local point = {x = 5, y = 0}
+      
+      assert.is_false(room:isConnectionPointUsed(point))
+      
+      room:markConnectionPointUsed(point)
+      
+      assert.is_true(room:isConnectionPointUsed(point))
+    end)
+    
+    it('should get available connection points', function()
+      local room = Room:new('1x1', 0, 0)
+      local allPoints = room:getConnectionPoints()
+      local available = room:getAvailableConnectionPoints()
+      
+      -- Initially all points should be available
+      assert.are.equal(#allPoints, #available)
+    end)
+    
+    it('should reduce available points after marking used', function()
+      local room = Room:new('1x1', 0, 0)
+      local allPoints = room:getConnectionPoints()
+      
+      -- Mark one point as used
+      room:markConnectionPointUsed(allPoints[1])
+      
+      local available = room:getAvailableConnectionPoints()
+      
+      assert.are.equal(#allPoints - 1, #available)
+    end)
+    
+    it('should mark connection point when connecting', function()
+      local room1 = Room:new('1x1', 0, 0)
+      local room2 = Room:new('1x1', 20, 0)
+      
+      local point1 = {x = 10, y = 5}
+      local point2 = {x = 20, y = 5}
+      
+      room1:connectTo(room2, point1, point2)
+      
+      assert.is_true(room1:isConnectionPointUsed(point1))
+    end)
+    
+    it('should detect connectable rooms', function()
+      local room1 = Room:new('1x1', 0, 0)
+      local room2 = Room:new('1x1', 12, 0)  -- 2 tiles apart (passage width)
+      
+      local myPoint, otherPoint = room1:canConnectTo(room2)
+      
+      assert.is_not_nil(myPoint)
+      assert.is_not_nil(otherPoint)
+    end)
+    
+    it('should not connect rooms too far apart', function()
+      local room1 = Room:new('1x1', 0, 0)
+      local room2 = Room:new('1x1', 50, 0)  -- Too far
+      
+      local myPoint, otherPoint = room1:canConnectTo(room2)
+      
+      assert.is_nil(myPoint)
+      assert.is_nil(otherPoint)
+    end)
+  end)
 end)

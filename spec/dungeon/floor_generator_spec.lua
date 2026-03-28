@@ -122,4 +122,34 @@ describe('FloorGenerator', function()
       end
     end)
   end)
+  
+  describe('multiple connections', function()
+    it('rooms can have multiple connections', function()
+      local generator = FloorGenerator:new()
+      local floor = generator:generate(10)  -- More rooms = more chance of multiple connections
+      
+      -- Find at least one room with multiple connections
+      local multiConnectionRoom = nil
+      for _, room in ipairs(floor.rooms) do
+        if #room.connections >= 2 then
+          multiConnectionRoom = room
+          break
+        end
+      end
+      
+      -- With 10 rooms and nearby connection logic, we should have rooms with 2+ connections
+      assert.is_not_nil(multiConnectionRoom, "Should have at least one room with multiple connections")
+    end)
+    
+    it('every room should have at least one door', function()
+      local generator = FloorGenerator:new()
+      local floor = generator:generate(8)
+      
+      -- Every room should have at least one connection (door)
+      for _, room in ipairs(floor.rooms) do
+        assert.is_true(#room.connections >= 1, 
+          "Room at (" .. room.x .. "," .. room.y .. ") should have at least one connection")
+      end
+    end)
+  end)
 end)
