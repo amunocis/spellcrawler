@@ -555,36 +555,43 @@ end
 
 -- Iniciar ciclo de partículas al entrar a una habitación (TEST)
 -- 4 ciclos durante 2 segundos (cada 0.5s)
+-- Las posiciones son fijas - ahí aparecerán los enemigos después
 function DungeonState:startRoomEnterParticleCycle(room)
+    local tileSize = 40
+    
+    -- Generar 5 posiciones fijas donde aparecerán los enemigos
+    room.enemySpawnPositions = {}
+    for i = 1, 5 do
+        local offsetX = math.random(2, room.width - 3)
+        local offsetY = math.random(2, room.height - 3)
+        table.insert(room.enemySpawnPositions, {
+            x = (room.x + offsetX) * tileSize,
+            y = (room.y + offsetY) * tileSize
+        })
+    end
+    
     room.particleCycle = {
         remainingCycles = 4,
         timer = 0,
         interval = 0.5
     }
+    
     -- Crear primera oleada inmediatamente
     self:createRoomEnterParticles(room)
 end
 
--- Crear partículas moradas al entrar a una habitación (TEST)
+-- Crear partículas moradas en las posiciones de spawn de enemigos
 function DungeonState:createRoomEnterParticles(room)
-    local tileSize = 40
+    if not room.enemySpawnPositions then return end
     
-    -- Crear 5 explosiones en posiciones aleatorias dentro de la habitación
-    for i = 1, 5 do
-        -- Posición aleatoria dentro de la habitación (evitando bordes)
-        local offsetX = math.random(2, room.width - 3)
-        local offsetY = math.random(2, room.height - 3)
-        
-        local px = (room.x + offsetX) * tileSize
-        local py = (room.y + offsetY) * tileSize
-        
-        -- Crear explosión de partículas moradas (como proyectiles)
+    -- Crear explosión de partículas en cada posición de spawn
+    for _, pos in ipairs(room.enemySpawnPositions) do
         for j = 1, 8 do
             local angle = (j / 8) * math.pi * 2
             local speed = math.random(50, 150)
             table.insert(self.particles, {
-                x = px,
-                y = py,
+                x = pos.x,
+                y = pos.y,
                 vx = math.cos(angle) * speed,
                 vy = math.sin(angle) * speed,
                 lifetime = 0.5,  -- 0.5 segundos
@@ -609,6 +616,9 @@ function DungeonState:updateRoomParticleCycles(dt)
                 -- Crear otra oleada de partículas
                 if room.particleCycle.remainingCycles > 0 then
                     self:createRoomEnterParticles(room)
+                else
+                    -- Último ciclo terminado - spawnear enemigos
+                    self:spawnEnemiesAtPositions(room)
                 end
                 
                 -- Si no quedan ciclos, limpiar
@@ -618,6 +628,29 @@ function DungeonState:updateRoomParticleCycles(dt)
             end
         end
     end
+end
+
+-- Spawnear enemigos en las posiciones marcadas por las partículas
+function DungeonState:spawnEnemiesAtPositions(room)
+    if not room.enemySpawnPositions then return end
+    
+    -- Track enemies for this room
+    room.enemies = room.enemies or {}
+    
+    -- Spawnear enemigos en cada posición marcada
+    for _, pos in ipairs(room.enemySpawnPositions) do
+        local enemy = EnemyFactory:createBat(pos.x, pos.y)
+        
+        -- Track which room this enemy belongs to
+        enemy.room = room
+        table.insert(room.enemies, enemy)
+        
+        self.combatSystem:addEnemy(enemy)
+        self.world:add(enemy, enemy.transform.x, enemy.transform.y, enemy.collider.w, enemy.collider.h)
+    end
+    
+    -- Limpiar posiciones (ya no se necesitan)
+    room.enemySpawnPositions = nil
 end
 
 -- Activar confinamiento si la habitación tiene enemigos vivos
