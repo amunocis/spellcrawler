@@ -164,21 +164,6 @@ function Minimap:draw(floor)
             love.graphics.rectangle('fill', bx - doorSize/2, by - doorSize/2, doorSize, doorSize)
         end
     end
-    
-    -- Info de la habitación actual
-    if self.currentRoom then
-        local roomName = ""
-        if self.currentRoom.isEntrance then
-            roomName = "Entrance"
-        elseif self.currentRoom.isExit then
-            roomName = "Exit"
-        else
-            roomName = self.currentRoom.contentType:gsub("^%l", string.upper)
-        end
-        
-        love.graphics.setColor(0.2, 0.8, 0.3, 1)
-        love.graphics.print(roomName, self.screenX + 5, self.screenY + self.height - 15)
-    end
 end
 
 return Minimap
