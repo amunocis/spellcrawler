@@ -244,6 +244,13 @@ end
 function DungeonState:updateEnemies(dt)
     for _, enemy in ipairs(self.combatSystem.enemies) do
         if not enemy.dead and enemy.behavior then
+            -- Check dizzy timer - enemigo está "aturdido" y no hace nada
+            if enemy.dizzyTimer and enemy.dizzyTimer > 0 then
+                enemy.dizzyTimer = enemy.dizzyTimer - dt
+                -- No se mueve ni actualiza comportamiento mientras está dizzy
+                goto continue
+            end
+            
             -- Verificar si el enemigo está fuera de su habitación
             if enemy.room then
                 enemy = self:checkEnemyInRoom(enemy)
@@ -287,6 +294,7 @@ function DungeonState:updateEnemies(dt)
                 end
             end
         end
+        ::continue::
     end
 end
 
@@ -995,7 +1003,11 @@ function DungeonState:draw()
             local ey = enemy.transform.y + (enemy.collider.offsetY or 0)
 
             -- Color según tipo
-            if enemy.type == 'bat' then
+            local isDizzy = enemy.dizzyTimer and enemy.dizzyTimer > 0
+            if isDizzy then
+                -- Efecto visual cuando está dizzy (más claro/amarillo)
+                love.graphics.setColor(0.9, 0.9, 0.4) -- Amarillo claro
+            elseif enemy.type == 'bat' then
                 love.graphics.setColor(0.6, 0.2, 0.8) -- Morado
             elseif enemy.type == 'golem' then
                 love.graphics.setColor(0.5, 0.5, 0.5) -- Gris
@@ -1004,6 +1016,13 @@ function DungeonState:draw()
             end
 
             love.graphics.rectangle('fill', ex, ey, enemy.collider.w, enemy.collider.h)
+            
+            -- Indicador visual de dizzy (estrellas pequeñas girando)
+            if isDizzy then
+                love.graphics.setColor(1, 1, 0.5, 0.8)
+                local starOffset = math.sin(love.timer.getTime() * 10) * 3
+                love.graphics.circle('fill', ex + enemy.collider.w/2, ey - 5 + starOffset, 3)
+            end
 
             -- Borde
             love.graphics.setColor(0.2, 0.2, 0.2)
