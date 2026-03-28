@@ -9,6 +9,7 @@ local EnemyFactory = require('src.enemies.enemy_factory')
 local CombatSystem = require('src.combat.combat_system')
 local FloorGenerator = require('src.dungeon.floor_generator')
 local RoomRenderer = require('src.dungeon.room_renderer')
+local Minimap = require('src.ui.minimap')
 
 local DungeonState = {}
 DungeonState.__index = DungeonState
@@ -98,6 +99,10 @@ function DungeonState:enter(seed)
     
     -- Habitación actual del jugador
     self.currentRoom = entranceRoom
+    
+    -- Minimapa
+    self.minimap = Minimap:new()
+    self.minimap:setCurrentRoom(entranceRoom)
 end
 
 function DungeonState:createWalls()
@@ -391,6 +396,9 @@ function DungeonState:update(dt)
 
     -- Movimiento del jugador
     self:updatePlayerMovement(dt, input)
+    
+    -- Actualizar habitación actual para el minimapa
+    self:updateCurrentRoom()
 
     -- Castear hechizo (autofire con cooldown de 0.1s entre disparos)
     if input:isDown('cast_spell') then
@@ -466,6 +474,31 @@ function DungeonState:updatePlayerMovement(dt, input)
 
     self.player.x = actualX
     self.player.y = actualY
+end
+
+-- Actualizar la habitación actual basada en la posición del jugador
+function DungeonState:updateCurrentRoom()
+    local px = self.player.x + self.player.w / 2
+    local py = self.player.y + self.player.h / 2
+    
+    -- Convertir a coordenadas de tile (las habitaciones usan tiles, no píxeles)
+    local tileSize = 40
+    local tx = px / tileSize
+    local ty = py / tileSize
+    
+    -- Encontrar en qué habitación está el jugador
+    for _, room in ipairs(self.floor.rooms) do
+        if tx >= room.x and tx < room.x + room.width and
+           ty >= room.y and ty < room.y + room.height then
+            if self.currentRoom ~= room then
+                self.currentRoom = room
+                if self.minimap then
+                    self.minimap:setCurrentRoom(room)
+                end
+            end
+            break
+        end
+    end
 end
 
 function DungeonState:findNearestEnemy()
@@ -831,6 +864,11 @@ function DungeonState:drawUI()
             local name = spellDef.name:sub(1, 6) -- Acortar si es largo
             love.graphics.print(name, slotX, slotY + slotSize + 4)
         end
+    end
+
+    -- Minimapa
+    if self.minimap then
+        self.minimap:draw(self.floor)
     end
 
     -- Instrucciones
