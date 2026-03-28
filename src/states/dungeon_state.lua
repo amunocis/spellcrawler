@@ -139,12 +139,13 @@ function DungeonState:isPositionSafeFromPlayer(x, y, minDistance)
 end
 
 function DungeonState:isInsideWorldBounds(x, y, w, h)
+    local bounds = self:calculateWorldBounds()
     local offsetX = (w or 16) / 2
     local offsetY = (h or 16) / 2
-    return x >= self.worldBounds.x + offsetX and
-           x <= self.worldBounds.x + self.worldBounds.w - offsetX and
-           y >= self.worldBounds.y + offsetY and
-           y <= self.worldBounds.y + self.worldBounds.h - offsetY
+    return x >= bounds.x + offsetX and
+           x <= bounds.x + bounds.w - offsetX and
+           y >= bounds.y + offsetY and
+           y <= bounds.y + bounds.h - offsetY
 end
 
 function DungeonState:spawnEnemySafe(createFn, x, y)
@@ -160,11 +161,14 @@ function DungeonState:spawnEnemySafe(createFn, x, y)
             break
         end
         
-        -- Elegir posición aleatoria dentro del mundo jugable
-        -- Margen de seguridad para que no queden pegados a las paredes
-        local margin = 60
-        spawnX = self.worldBounds.x + margin + math.random(0, self.worldBounds.w - margin * 2)
-        spawnY = self.worldBounds.y + margin + math.random(0, self.worldBounds.h - margin * 2)
+        -- Elegir posición aleatoria dentro de una habitación
+        -- Por ahora, usar posición de habitación de entrada
+        local entrance = self.floor:getEntrance()
+        if entrance then
+            local center = entrance:getCenter()
+            spawnX = center.x * 40 + math.random(-50, 50)
+            spawnY = center.y * 40 + math.random(-50, 50)
+        end
         attempts = attempts + 1
     end
 
@@ -417,9 +421,33 @@ function DungeonState:update(dt)
     self.cameraY = self.player.y - love.graphics.getHeight() / 2
 end
 
+function DungeonState:calculateWorldBounds()
+    -- Calcular bounds basado en las habitaciones generadas
+    local minX, minY = math.huge, math.huge
+    local maxX, maxY = -math.huge, -math.huge
+    local tileSize = 40
+    
+    for _, room in ipairs(self.floor.rooms) do
+        minX = math.min(minX, room.x * tileSize)
+        minY = math.min(minY, room.y * tileSize)
+        maxX = math.max(maxX, (room.x + room.width) * tileSize)
+        maxY = math.max(maxY, (room.y + room.height) * tileSize)
+    end
+    
+    -- Agregar margen
+    local margin = 100
+    return {
+        x = minX - margin,
+        y = minY - margin,
+        w = (maxX - minX) + margin * 2,
+        h = (maxY - minY) + margin * 2
+    }
+end
+
 function DungeonState:clampToWorldBounds(x, y, w, h)
-    local clampedX = math.max(self.worldBounds.x, math.min(x, self.worldBounds.x + self.worldBounds.w - w))
-    local clampedY = math.max(self.worldBounds.y, math.min(y, self.worldBounds.y + self.worldBounds.h - h))
+    local bounds = self:calculateWorldBounds()
+    local clampedX = math.max(bounds.x, math.min(x, bounds.x + bounds.w - w))
+    local clampedY = math.max(bounds.y, math.min(y, bounds.y + bounds.h - h))
     return clampedX, clampedY
 end
 
@@ -562,11 +590,12 @@ function DungeonState:updateProjectiles(dt)
             end
         end
         
-        -- También verificar límites del mundo
-        if newX < self.worldBounds.x or 
-           newX + p.w > self.worldBounds.x + self.worldBounds.w or
-           newY < self.worldBounds.y or 
-           newY + p.h > self.worldBounds.y + self.worldBounds.h then
+        -- También verificar límites del mundo (basado en habitaciones)
+        local bounds = self:calculateWorldBounds()
+        if newX < bounds.x or 
+           newX + p.w > bounds.x + bounds.w or
+           newY < bounds.y or 
+           newY + p.h > bounds.y + bounds.h then
             hitWall = true
         end
 
