@@ -99,6 +99,9 @@ function DungeonState:enter(seed)
     -- Habitación actual del jugador
     self.currentRoom = entranceRoom
     
+    -- La entrada comienza como 'clear' (sin enemigos)
+    entranceRoom:setState('clear')
+    
     -- Minimapa
     self.minimap = Minimap:new()
     self.minimap:setCurrentRoom(entranceRoom)
@@ -567,9 +570,13 @@ function DungeonState:handleRoomStateTransition(room)
     if room.state == 'idle' then
         room:setState('active')
         
-        -- Solo spawnear enemigos si nunca se han spawneado
-        if room:canSpawnEnemies() then
+        -- Spawnear enemigos si nunca se han spawneado
+        -- (solo en habitaciones de combate o jefe, o cualquiera excepto entrada/salida)
+        if room:canSpawnEnemies() and not room.isEntrance and not room.isExit then
             self:startRoomEnterParticleCycle(room)
+        else
+            -- Marcar como spawneado (para que no intente de nuevo)
+            room:markEnemiesSpawned()
         end
     end
 end
