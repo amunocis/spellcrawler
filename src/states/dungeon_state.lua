@@ -542,9 +542,39 @@ function DungeonState:updateCurrentRoom()
                 if self.minimap then
                     self.minimap:setCurrentRoom(room)
                 end
-                -- TEST: Marcar habitación como "activa" (cambiará color del piso)
+                -- TEST: Crear partículas moradas en la habitación
+                self:createRoomEnterParticles(room)
             end
             break
+        end
+    end
+end
+
+-- Crear partículas moradas al entrar a una habitación (TEST)
+function DungeonState:createRoomEnterParticles(room)
+    local tileSize = 40
+    
+    -- Crear 5 partículas en posiciones aleatorias dentro de la habitación
+    for i = 1, 5 do
+        -- Posición aleatoria dentro de la habitación (evitando bordes)
+        local offsetX = math.random(2, room.width - 3)
+        local offsetY = math.random(2, room.height - 3)
+        
+        local px = (room.x + offsetX) * tileSize
+        local py = (room.y + offsetY) * tileSize
+        
+        -- Crear explosión de partículas moradas (como proyectiles)
+        for j = 1, 8 do
+            local angle = (j / 8) * math.pi * 2
+            local speed = math.random(50, 150)
+            table.insert(self.particles, {
+                x = px,
+                y = py,
+                vx = math.cos(angle) * speed,
+                vy = math.sin(angle) * speed,
+                lifetime = 2.0,  -- 2 segundos
+                color = {0.7, 0.3, 0.9}  -- Morado
+            })
         end
     end
 end
@@ -853,12 +883,11 @@ function DungeonState:draw()
 
     -- Dibujar habitaciones generadas proceduralmente
     -- Nota: la cámara ya se aplicó con translate, pasamos 0,0
-    -- TEST: La habitación actual tiene el piso en rojo pastel
+    -- Dibujar habitaciones
     if self.floor and self.roomRenderer then
         for _, room in ipairs(self.floor.rooms) do
             if self.roomTiles[room] then
-                local isCurrent = (room == self.currentRoom)
-                self.roomRenderer:draw(room, self.roomTiles[room], 0, 0, isCurrent)
+                self.roomRenderer:draw(room, self.roomTiles[room], 0, 0)
             end
         end
     end

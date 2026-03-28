@@ -143,12 +143,7 @@ function RoomRenderer:draw(room, tiles, cameraX, cameraY, isCurrentRoom)
       
       -- Color según tipo de tile
       if tile == 'floor' then
-        -- TEST: Piso rojo pastel si es la habitación actual
-        if isCurrentRoom then
-          love.graphics.setColor(0.9, 0.5, 0.5)  -- Rojo pastel
-        else
-          love.graphics.setColor(0.2, 0.2, 0.25)  -- Gris normal
-        end
+        love.graphics.setColor(0.2, 0.2, 0.25)  -- Gris normal
       elseif tile == 'wall' then
         love.graphics.setColor(0.4, 0.35, 0.3)
       elseif tile == 'door' then
