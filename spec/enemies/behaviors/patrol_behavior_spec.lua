@@ -41,16 +41,15 @@ describe('PatrolBehavior', function()
       }
       local dt = 0.1
 
-      -- First call sets target
-      behavior:update(enemy, nil, dt)
-      local startX = enemy.transform.x
+      -- Set a fixed distant target to avoid randomness
+      behavior.targetX = 40
+      behavior.targetY = 30
 
-      -- Second call moves towards it
+      -- Update moves towards it
       behavior:update(enemy, nil, dt)
 
       -- Should have moved
-      assert.is_true(enemy.transform.x ~= 0 or enemy.transform.y ~= 0 or
-                     (behavior.targetX == 0 and behavior.targetY == 0))
+      assert.is_true(enemy.transform.x ~= 0 or enemy.transform.y ~= 0)
     end)
 
     it('should pick new target when reaching current', function()

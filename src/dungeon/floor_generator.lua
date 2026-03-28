@@ -154,8 +154,8 @@ function FloorGenerator:placeConnectedRoom(roomType)
   local parentRoom = connection.room
   local parentPoint = connection.point
   
-  -- Calcular offset basado en dirección
-  local offset = self:calculateOffset(parentPoint.dir, roomType)
+  -- Calcular offset basado en dirección (pasando parentRoom para tamaños)
+  local offset = self:calculateOffset(parentPoint.dir, roomType, parentRoom)
   local newX = parentPoint.x + offset.x
   local newY = parentPoint.y + offset.y
   
@@ -186,15 +186,7 @@ function FloorGenerator:placeConnectedRoom(roomType)
 end
 
 -- Calcular offset basado en dirección
-function FloorGenerator:calculateOffset(direction, roomType)
-  local offsets = {
-    north = {x = 0, y = -10},
-    south = {x = 0, y = 10},
-    east = {x = 10, y = 0},
-    west = {x = -10, y = 0},
-  }
-  
-  -- Ajustar según tamaño de la habitación nueva
+function FloorGenerator:calculateOffset(direction, roomType, parentRoom)
   local roomDims = {
     ['1x1'] = {w = 10, h = 10},
     ['2x1'] = {w = 20, h = 10},
@@ -203,17 +195,23 @@ function FloorGenerator:calculateOffset(direction, roomType)
   }
   
   local dims = roomDims[roomType]
-  local baseOffset = offsets[direction] or {x = 0, y = 0}
+  local parentDims = {w = parentRoom.width, h = parentRoom.height}
   
-  -- Ajustar para que las habitaciones queden alineadas
+  -- Offset para dejar un pasillo de 2 tiles entre habitaciones
+  local passage = 2
+  
   if direction == 'north' then
-    return {x = -dims.w/2, y = -dims.h}
+    -- Nueva habitación arriba: alinear horizontalmente, colocar arriba con pasillo
+    return {x = -dims.w/2, y = -(dims.h + passage)}
   elseif direction == 'south' then
-    return {x = -dims.w/2, y = 0}
+    -- Nueva habitación abajo: alinear horizontalmente, colocar abajo con pasillo
+    return {x = -dims.w/2, y = parentDims.h + passage}
   elseif direction == 'east' then
-    return {x = 0, y = -dims.h/2}
+    -- Nueva habitación a la derecha: alinear verticalmente, colocar a la derecha con pasillo
+    return {x = parentDims.w + passage, y = -dims.h/2}
   elseif direction == 'west' then
-    return {x = -dims.w, y = -dims.h/2}
+    -- Nueva habitación a la izquierda: alinear verticalmente, colocar a la izquierda con pasillo
+    return {x = -(dims.w + passage), y = -dims.h/2}
   end
   
   return {x = 0, y = 0}
