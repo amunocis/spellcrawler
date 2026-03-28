@@ -131,7 +131,8 @@ function RoomRenderer:createCollisionObjects(room, tiles)
 end
 
 -- Dibujar una habitación
-function RoomRenderer:draw(room, tiles, cameraX, cameraY)
+-- isCurrentRoom: si es true, el piso se pinta de rojo pastel (TEST)
+function RoomRenderer:draw(room, tiles, cameraX, cameraY, isCurrentRoom)
   local tileSize = TILE_SIZE
   
   for y = 1, #tiles do
@@ -142,16 +143,17 @@ function RoomRenderer:draw(room, tiles, cameraX, cameraY)
       
       -- Color según tipo de tile
       if tile == 'floor' then
-        love.graphics.setColor(0.2, 0.2, 0.25)
+        -- TEST: Piso rojo pastel si es la habitación actual
+        if isCurrentRoom then
+          love.graphics.setColor(0.9, 0.5, 0.5)  -- Rojo pastel
+        else
+          love.graphics.setColor(0.2, 0.2, 0.25)  -- Gris normal
+        end
       elseif tile == 'wall' then
         love.graphics.setColor(0.4, 0.35, 0.3)
       elseif tile == 'door' then
-        -- Puerta bloqueada (confinamiento activo) = rojo, normal = marrón
-        if room.isConfinementActive then
-          love.graphics.setColor(0.9, 0.2, 0.2)  -- Rojo para bloqueada
-        else
-          love.graphics.setColor(0.6, 0.4, 0.2)  -- Marrón normal
-        end
+        -- Puerta marrón normal (confinamiento desactivado por ahora)
+        love.graphics.setColor(0.6, 0.4, 0.2)
       elseif tile == 'rock' then
         love.graphics.setColor(0.35, 0.3, 0.25)
       elseif tile == 'pillar' then

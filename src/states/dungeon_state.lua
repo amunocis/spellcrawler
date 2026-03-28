@@ -90,8 +90,7 @@ function DungeonState:enter(seed)
     -- Sistema de combate
     self.combatSystem = CombatSystem:new()
 
-    -- Spawnear enemigos en cada habitación de combate
-    self:spawnEnemiesInRooms()
+    -- NOTA: Enemigos se spawnearán al entrar a habitaciones (desactivado por ahora)
 
     -- Cámara
     self.cameraX = 0
@@ -447,9 +446,6 @@ function DungeonState:update(dt)
     
     -- Actualizar habitación actual para el minimapa
     self:updateCurrentRoom()
-    
-    -- Actualizar timers de confinamiento
-    self:updateConfinementTimers(dt)
 
     -- Castear hechizo (autofire con cooldown de 0.1s entre disparos)
     if input:isDown('cast_spell') then
@@ -546,8 +542,7 @@ function DungeonState:updateCurrentRoom()
                 if self.minimap then
                     self.minimap:setCurrentRoom(room)
                 end
-                -- Activar confinamiento si la habitación tiene enemigos
-                self:activateConfinementIfNeeded(room)
+                -- TEST: Marcar habitación como "activa" (cambiará color del piso)
             end
             break
         end
@@ -858,10 +853,12 @@ function DungeonState:draw()
 
     -- Dibujar habitaciones generadas proceduralmente
     -- Nota: la cámara ya se aplicó con translate, pasamos 0,0
+    -- TEST: La habitación actual tiene el piso en rojo pastel
     if self.floor and self.roomRenderer then
         for _, room in ipairs(self.floor.rooms) do
             if self.roomTiles[room] then
-                self.roomRenderer:draw(room, self.roomTiles[room], 0, 0)
+                local isCurrent = (room == self.currentRoom)
+                self.roomRenderer:draw(room, self.roomTiles[room], 0, 0, isCurrent)
             end
         end
     end
