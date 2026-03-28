@@ -566,13 +566,16 @@ end
 
 -- Manejar transición de estado cuando el jugador entra a una habitación
 function DungeonState:handleRoomStateTransition(room)
-    -- Si la habitación está en idle, activarla
+    -- Si la habitación está en idle, procesar entrada
     if room.state == 'idle' then
+        -- Primero verificar si debe spawnear enemigos (antes de cambiar estado)
+        local shouldSpawn = room:canSpawnEnemies() and not room.isEntrance and not room.isExit
+        
+        -- Cambiar estado a active
         room:setState('active')
         
-        -- Spawnear enemigos si nunca se han spawneado
-        -- (solo en habitaciones de combate o jefe, o cualquiera excepto entrada/salida)
-        if room:canSpawnEnemies() and not room.isEntrance and not room.isExit then
+        -- Spawnear enemigos si corresponde
+        if shouldSpawn then
             self:startRoomEnterParticleCycle(room)
         else
             -- Marcar como spawneado (para que no intente de nuevo)
