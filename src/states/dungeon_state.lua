@@ -573,7 +573,8 @@ function DungeonState:createRoomEnterParticles(room)
                 vx = math.cos(angle) * speed,
                 vy = math.sin(angle) * speed,
                 lifetime = 2.0,  -- 2 segundos
-                color = {0.7, 0.3, 0.9}  -- Morado
+                color = {0.7, 0.3, 0.9},  -- Morado
+                size = math.random(3, 6)  -- Tamaño aleatorio
             })
         end
     end
@@ -692,7 +693,8 @@ function DungeonState:createRoomClearEffect(room)
             vx = math.cos(angle) * speed,
             vy = math.sin(angle) * speed,
             lifetime = 1.0,
-            color = {0.9, 0.8, 0.2}
+            color = {0.9, 0.8, 0.2},
+            size = math.random(3, 5)
         })
     end
 end
