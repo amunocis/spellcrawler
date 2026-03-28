@@ -146,7 +146,12 @@ function RoomRenderer:draw(room, tiles, cameraX, cameraY)
       elseif tile == 'wall' then
         love.graphics.setColor(0.4, 0.35, 0.3)
       elseif tile == 'door' then
-        love.graphics.setColor(0.6, 0.4, 0.2)
+        -- Puerta bloqueada (confinamiento activo) = rojo, normal = marrón
+        if room.isConfinementActive then
+          love.graphics.setColor(0.9, 0.2, 0.2)  -- Rojo para bloqueada
+        else
+          love.graphics.setColor(0.6, 0.4, 0.2)  -- Marrón normal
+        end
       elseif tile == 'rock' then
         love.graphics.setColor(0.35, 0.3, 0.25)
       elseif tile == 'pillar' then

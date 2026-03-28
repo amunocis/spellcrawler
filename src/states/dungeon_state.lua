@@ -219,6 +219,9 @@ function DungeonState:spawnEnemiesInRoom(room, count, isBoss)
         spawnPoints[i], spawnPoints[j] = spawnPoints[j], spawnPoints[i]
     end
     
+    -- Track enemies for this room
+    room.enemies = room.enemies or {}
+    
     -- Spawnear enemigos
     for i = 1, math.min(count, #spawnPoints) do
         local point = spawnPoints[i]
@@ -229,6 +232,10 @@ function DungeonState:spawnEnemiesInRoom(room, count, isBoss)
         else
             enemy = EnemyFactory:createBat(point.x, point.y)
         end
+        
+        -- Track which room this enemy belongs to
+        enemy.room = room
+        table.insert(room.enemies, enemy)
         
         self.combatSystem:addEnemy(enemy)
         self.world:add(enemy, enemy.transform.x, enemy.transform.y, enemy.collider.w, enemy.collider.h)
@@ -326,6 +333,9 @@ function DungeonState:handleKilledEnemies(killed)
             y = enemy.transform.y
         })
     end
+    
+    -- Verificar si la habitación está limpia
+    self:checkRoomClear()
 end
 
 function DungeonState:exit()
@@ -495,9 +505,117 @@ function DungeonState:updateCurrentRoom()
                 if self.minimap then
                     self.minimap:setCurrentRoom(room)
                 end
+                -- Activar confinamiento si la habitación tiene enemigos
+                self:activateConfinementIfNeeded(room)
             end
             break
         end
+    end
+end
+
+-- Activar confinamiento si la habitación tiene enemigos vivos
+function DungeonState:activateConfinementIfNeeded(room)
+    -- Solo activar en habitaciones de combate o jefe que tengan enemigos
+    if room.contentType ~= 'combat' and room.contentType ~= 'boss' then
+        return
+    end
+    
+    -- Contar enemigos vivos en esta habitación
+    local aliveEnemies = 0
+    if room.enemies then
+        for _, enemy in ipairs(room.enemies) do
+            if not enemy.dead then
+                aliveEnemies = aliveEnemies + 1
+            end
+        end
+    end
+    
+    -- Si hay enemigos vivos, activar confinamiento
+    if aliveEnemies > 0 then
+        room.isConfinementActive = true
+        self:addConfinementBlocks(room)
+    end
+end
+
+-- Añadir bloques de colisión en las puertas para confinar al jugador
+function DungeonState:addConfinementBlocks(room)
+    -- Remover bloques anteriores si existen
+    self:removeConfinementBlocks(room)
+    
+    room.confinementBlocks = {}
+    local tileSize = 40
+    
+    -- Crear bloques de colisión en cada puerta de la habitación
+    for _, conn in ipairs(room.connections) do
+        -- El punto de conexión está en el borde de la habitación
+        local block = {
+            x = conn.myPoint.x * tileSize,
+            y = conn.myPoint.y * tileSize,
+            w = tileSize,
+            h = tileSize,
+            type = 'confinement_block',
+            room = room
+        }
+        
+        table.insert(room.confinementBlocks, block)
+        self.world:add(block, block.x, block.y, block.w, block.h)
+    end
+end
+
+-- Remover bloques de confinamiento
+function DungeonState:removeConfinementBlocks(room)
+    if room.confinementBlocks then
+        for _, block in ipairs(room.confinementBlocks) do
+            local ok, err = pcall(function() self.world:remove(block) end)
+        end
+        room.confinementBlocks = nil
+    end
+    room.isConfinementActive = false
+end
+
+-- Verificar si la habitación actual está limpia (sin enemigos)
+function DungeonState:checkRoomClear()
+    if not self.currentRoom or not self.currentRoom.isConfinementActive then
+        return
+    end
+    
+    local room = self.currentRoom
+    local aliveEnemies = 0
+    
+    if room.enemies then
+        for _, enemy in ipairs(room.enemies) do
+            if not enemy.dead then
+                aliveEnemies = aliveEnemies + 1
+            end
+        end
+    end
+    
+    -- Si no quedan enemigos, liberar confinamiento
+    if aliveEnemies == 0 then
+        self:removeConfinementBlocks(room)
+        -- Efecto visual de liberación
+        self:createRoomClearEffect(room)
+    end
+end
+
+-- Efecto visual cuando se limpia una habitación
+function DungeonState:createRoomClearEffect(room)
+    local tileSize = 40
+    local centerX = (room.x + room.width / 2) * tileSize
+    local centerY = (room.y + room.height / 2) * tileSize
+    
+    -- Partículas doradas en el centro
+    for i = 1, 20 do
+        local angle = (i / 20) * math.pi * 2
+        local speed = math.random(100, 200)
+        table.insert(self.particles, {
+            x = centerX,
+            y = centerY,
+            vx = math.cos(angle) * speed,
+            vy = math.sin(angle) * speed,
+            lifetime = 1.0,
+            color = {0.9, 0.8, 0.2}
+        })
     end
 end
 
