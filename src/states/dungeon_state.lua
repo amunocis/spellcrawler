@@ -245,6 +245,11 @@ end
 function DungeonState:updateEnemies(dt)
     for _, enemy in ipairs(self.combatSystem.enemies) do
         if not enemy.dead and enemy.behavior then
+            -- Verificar si el enemigo está fuera de su habitación
+            if enemy.room then
+                enemy = self:checkEnemyInRoom(enemy)
+            end
+            
             -- Calcular nueva posición deseada
             local oldX, oldY = enemy.transform.x, enemy.transform.y
             enemy.behavior:update(enemy, self.player, dt)
@@ -257,15 +262,19 @@ function DungeonState:updateEnemies(dt)
             newX, newY = self:clampToWorldBounds(newX, newY, enemy.collider.w, enemy.collider.h)
 
             local actualX, actualY, cols, len = self.world:move(enemy, newX, newY, function(item, other)
-                -- Enemigos colisionan con paredes y jugador
+                -- Enemigos colisionan con paredes, jugador y bloques de confinamiento
                 if other == self.player then
+                    return 'touch'
+                end
+                -- Bloques de confinamiento (puertas bloqueadas)
+                if other.type == 'confinement_block' then
                     return 'touch'
                 end
                 -- Ignorar otros enemigos
                 if other.transform then
                     return 'cross'
                 end
-                return 'touch' -- Paredes
+                return 'touch' -- Paredes y otros objetos
             end)
 
             enemy.transform.x = actualX
@@ -280,6 +289,35 @@ function DungeonState:updateEnemies(dt)
             end
         end
     end
+end
+
+-- Verificar si el enemigo está dentro de su habitación asignada
+-- Si está fuera, forzarlo a volver
+function DungeonState:checkEnemyInRoom(enemy)
+    local room = enemy.room
+    if not room then return enemy end
+    
+    local tileSize = 40
+    local ex = enemy.transform.x + enemy.collider.w / 2
+    local ey = enemy.transform.y + enemy.collider.h / 2
+    local tx = ex / tileSize
+    local ty = ey / tileSize
+    
+    -- Verificar si está dentro de la habitación (con margen pequeño)
+    local margin = 0.5
+    if tx < room.x - margin or tx > room.x + room.width + margin or
+       ty < room.y - margin or ty > room.y + room.height + margin then
+        -- Está fuera, forzar vuelta al centro de la habitación
+        local center = room:getCenter()
+        enemy.transform.x = center.x * tileSize - enemy.collider.w / 2
+        enemy.transform.y = center.y * tileSize - enemy.collider.h / 2
+        -- Resetear comportamiento
+        if enemy.behavior and enemy.behavior.reset then
+            enemy.behavior:reset()
+        end
+    end
+    
+    return enemy
 end
 
 function DungeonState:handlePlayerHitByEnemy(enemy)
@@ -409,6 +447,9 @@ function DungeonState:update(dt)
     
     -- Actualizar habitación actual para el minimapa
     self:updateCurrentRoom()
+    
+    -- Actualizar timers de confinamiento
+    self:updateConfinementTimers(dt)
 
     -- Castear hechizo (autofire con cooldown de 0.1s entre disparos)
     if input:isDown('cast_spell') then
@@ -514,6 +555,7 @@ function DungeonState:updateCurrentRoom()
 end
 
 -- Activar confinamiento si la habitación tiene enemigos vivos
+-- Usa un delay para permitir que el jugador entre completamente
 function DungeonState:activateConfinementIfNeeded(room)
     -- Solo activar en habitaciones de combate o jefe que tengan enemigos
     if room.contentType ~= 'combat' and room.contentType ~= 'boss' then
@@ -530,10 +572,24 @@ function DungeonState:activateConfinementIfNeeded(room)
         end
     end
     
-    -- Si hay enemigos vivos, activar confinamiento
-    if aliveEnemies > 0 then
-        room.isConfinementActive = true
-        self:addConfinementBlocks(room)
+    -- Si hay enemigos vivos, programar activación con delay
+    if aliveEnemies > 0 and not room.confinementScheduled then
+        room.confinementScheduled = true
+        -- Delay de 0.5 segundos para permitir entrada completa
+        room.confinementTimer = 0.5
+    end
+end
+
+-- Actualizar timers de confinamiento pendiente
+function DungeonState:updateConfinementTimers(dt)
+    for _, room in ipairs(self.floor.rooms) do
+        if room.confinementScheduled and room.confinementTimer > 0 then
+            room.confinementTimer = room.confinementTimer - dt
+            if room.confinementTimer <= 0 and not room.isConfinementActive then
+                room.isConfinementActive = true
+                self:addConfinementBlocks(room)
+            end
+        end
     end
 end
 
@@ -545,14 +601,19 @@ function DungeonState:addConfinementBlocks(room)
     room.confinementBlocks = {}
     local tileSize = 40
     
-    -- Crear bloques de colisión en cada puerta de la habitación
+    -- Crear bloques de colisión en cada conexión de la habitación
+    -- Los puntos de conexión están en coordenadas de mundo (tiles)
     for _, conn in ipairs(room.connections) do
-        -- El punto de conexión está en el borde de la habitación
+        local px = conn.myPoint.x
+        local py = conn.myPoint.y
+        
+        -- El punto de conexión está justo en el borde de la habitación
+        -- Creamos un bloque de 2x2 tiles para bloquear toda la puerta
         local block = {
-            x = conn.myPoint.x * tileSize,
-            y = conn.myPoint.y * tileSize,
-            w = tileSize,
-            h = tileSize,
+            x = px * tileSize,
+            y = py * tileSize,
+            w = tileSize * 2,  -- 2 tiles de ancho
+            h = tileSize * 2,  -- 2 tiles de alto
             type = 'confinement_block',
             room = room
         }
